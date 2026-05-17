@@ -2,7 +2,7 @@
 Tests for utils module.
 """
 import pytest
-from utils import extract_json, parse_price
+from utils import extract_json, parse_price, normalize_model_name
 
 
 class TestExtractJson:
@@ -84,3 +84,53 @@ class TestParsePrice:
         assert parse_price("") == 0.0
         assert parse_price("N/A") == 0.0
         assert parse_price("free") == 0.0
+
+
+class TestNormalizeModelName:
+    """Tests for normalize_model_name function."""
+
+    def test_normalize_basic(self):
+        """Test basic model name normalization."""
+        assert normalize_model_name("Pixel 9a") == "pixel9a"
+        assert normalize_model_name("Pixel 9A") == "pixel9a"
+        assert normalize_model_name("Google Pixel 9a") == "pixel9a"
+
+    def test_normalize_with_spaces(self):
+        """Test normalization of spaces in model names."""
+        assert normalize_model_name("Pixel 9 a") == "pixel9a"
+        assert normalize_model_name("Pixel  9a") == "pixel9a"
+
+    def test_normalize_with_dashes(self):
+        """Test normalization of dashes in model names."""
+        assert normalize_model_name("Pixel-9a") == "pixel9a"
+        assert normalize_model_name("Pixel-9-a") == "pixel9a"
+
+    def test_normalize_iphone(self):
+        """Test iPhone model normalization."""
+        assert normalize_model_name("iPhone 15") == "iphone15"
+        assert normalize_model_name("Apple iPhone 15") == "iphone15"
+        assert normalize_model_name("iPhone 15 Pro") == "iphone15pro"
+        assert normalize_model_name("Apple iPhone 15 Pro Max") == "iphone15promax"
+
+    def test_normalize_galaxy(self):
+        """Test Samsung Galaxy model normalization."""
+        assert normalize_model_name("Samsung Galaxy S23") == "galaxys23"
+        assert normalize_model_name("Galaxy S23 Ultra") == "galaxys23ultra"
+        assert normalize_model_name("Samsung Galaxy S23+") == "galaxys23+"
+
+    def test_normalize_empty(self):
+        """Test normalization of empty string."""
+        assert normalize_model_name("") == ""
+        assert normalize_model_name("   ") == ""
+
+    def test_normalize_case_insensitive(self):
+        """Test that normalization is case-insensitive."""
+        assert normalize_model_name("PIXEL 9A") == "pixel9a"
+        assert normalize_model_name("pixel 9a") == "pixel9a"
+        assert normalize_model_name("GoOgLe PiXeL 9A") == "pixel9a"
+
+    def test_normalize_other_brands(self):
+        """Test normalization of other brand models."""
+        assert normalize_model_name("MacBook Pro M3") == "macbookprom3"
+        assert normalize_model_name("Apple MacBook Pro M3") == "macbookprom3"
+        assert normalize_model_name("Sony WH-1000XM5") == "wh1000xm5"

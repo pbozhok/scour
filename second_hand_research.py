@@ -37,7 +37,7 @@ from rich.table import Table
 
 import config
 from models import Listing
-from utils import extract_json, parse_price
+from utils import extract_json, parse_price, normalize_model_name
 from llm import get_client
 from scrapers import DBAScraper, VintedScraper, TraderaScraper
 
@@ -421,31 +421,39 @@ async def search_reviews(model: str) -> list[dict]:
 async def search_reviews_for_models(listings: list[Listing]) -> dict[str, list[dict]]:
     """
     Search reviews for each unique product model only once.
-    Returns a dict mapping model → list of review dicts.
+    Returns a dict mapping normalized_model → list of review dicts.
     Deduplicates models to avoid redundant searches.
     """
-    # Get unique models (preserving order)
-    seen = set()
-    unique_models = []
+    # Get unique models using normalized names for de-duplication
+    # Keep track of both original and normalized names
+    seen_normalized = set()
+    unique_models = []  # List of (original_model, normalized_model) tuples
+    
     for listing in listings:
-        if listing.product_model and listing.product_model not in seen:
-            unique_models.append(listing.product_model)
-            seen.add(listing.product_model)
+        if listing.product_model:
+            normalized = normalize_model_name(listing.product_model)
+            if normalized and normalized not in seen_normalized:
+                unique_models.append((listing.product_model, normalized))
+                seen_normalized.add(normalized)
     
     if not unique_models:
         return {}
     
-    console.print(f"  [dim]Searching reviews for {len(unique_models)} unique model(s): {', '.join(unique_models)}[/dim]")
+    # Extract just the original model names for display
+    original_models = [m[0] for m in unique_models]
+    console.print(f"  [dim]Searching reviews for {len(unique_models)} unique model(s): {', '.join(original_models)}[/dim]")
     
-    # Search for each model concurrently
-    results = await asyncio.gather(*[search_reviews(model) for model in unique_models])
+    # Search for each model concurrently using the original name (for better search results)
+    results = await asyncio.gather(*[search_reviews(model[0]) for model in unique_models])
     
-    # Map model → reviews
-    reviews_cache = dict(zip(unique_models, results))
+    # Map normalized_model → reviews (using normalized key for deduplication)
+    reviews_cache = {}
+    for (original, normalized), reviews in zip(unique_models, results):
+        reviews_cache[normalized] = reviews
     
     if args.debug:
-        for model, reviews in reviews_cache.items():
-            console.print(f"  [dim]  → {model}: {len(reviews)} review(s)[/dim]")
+        for (original, normalized), reviews in zip(unique_models, results):
+            console.print(f"  [dim]  → {original} ({normalized}): {len(reviews)} review(s)[/dim]")
     
     return reviews_cache
 
@@ -454,24 +462,45 @@ async def aggregate_reviews(listings: list[Listing]) -> None:
     """Search reviews per unique model, generate summaries per model, then copy to listings."""
     console.print("[bold cyan]Step 4: Aggregating reviews...[/bold cyan]")
     
-    # Search for reviews once per unique model
+    # Search for reviews once per unique model (using normalized names for de-duplication)
     reviews_cache = await search_reviews_for_models(listings)
     
-    # Generate summaries once per unique model
+    # Generate summaries once per unique normalized model
     summary_cache = {}
-    unique_models = list(dict.fromkeys(l.product_model for l in listings if l.product_model))
     
-    for model in unique_models:
-        summary_cache[model] = await generate_summary_for_model(model, reviews_cache.get(model, []))
-    
-    # Assign cached summaries to all listings with that model
+    # Get all unique normalized models from listings
+    normalized_models = set()
     for listing in listings:
-        if listing.product_model in summary_cache:
-            summary_data = summary_cache[listing.product_model]
-            listing.review_summary = summary_data["summary"]
-            listing.review_links = summary_data["links"]
+        if listing.product_model:
+            normalized = normalize_model_name(listing.product_model)
+            if normalized:
+                normalized_models.add(normalized)
     
-    console.print(f"  Done for {len(listings)} listings ({len(unique_models)} unique model(s))\n")
+    for normalized_model in normalized_models:
+        # Find the original model name to use for the summary
+        # Use the first listing's original model name
+        original_model = None
+        for listing in listings:
+            if listing.product_model and normalize_model_name(listing.product_model) == normalized_model:
+                original_model = listing.product_model
+                break
+        
+        if original_model:
+            summary_cache[normalized_model] = await generate_summary_for_model(
+                original_model, 
+                reviews_cache.get(normalized_model, [])
+            )
+    
+    # Assign cached summaries to all listings with that model (using normalized lookup)
+    for listing in listings:
+        if listing.product_model:
+            normalized = normalize_model_name(listing.product_model)
+            if normalized and normalized in summary_cache:
+                summary_data = summary_cache[normalized]
+                listing.review_summary = summary_data["summary"]
+                listing.review_links = summary_data["links"]
+    
+    console.print(f"  Done for {len(listings)} listings ({len(normalized_models)} unique model(s))\n")
 
 
 async def generate_summary_for_model(model: str, raw_reviews: list[dict]) -> dict[str, any]:

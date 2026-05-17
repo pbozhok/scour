@@ -112,3 +112,60 @@ def parse_price(text: str) -> float:
         return float(max(numbers))
     
     return 0.0
+
+
+def normalize_model_name(model_name: str) -> str:
+    """
+    Normalize a product model name for de-duplication.
+    Converts variations like "Pixel 9a", "Pixel 9A", "Google Pixel 9a" to a canonical form.
+    
+    Rules:
+    - Convert to lowercase
+    - Remove common manufacturer prefixes (google, apple, samsung, etc.)
+    - Remove special characters and extra whitespace
+    - Normalize spaces and common abbreviations
+    
+    Args:
+        model_name: The model name to normalize
+        
+    Returns:
+        Normalized model name string
+    """
+    if not model_name:
+        return ""
+    
+    name = model_name.strip().lower()
+    
+    # Remove common manufacturer prefixes that don't affect model identity
+    # These are manufacturers that users might or might not include
+    # Note: We don't remove "pixel" as it's the brand name itself
+    manufacturer_prefixes = [
+        'google ', 'apple ', 'samsung ', 'sony ', 'lg ', 'motorola ', 'oneplus ',
+        'xiaomi ', 'huawei ', 'oppo ', 'vivo ', 'realme ', 'nokia ',
+        'asus ', 'acer ', 'lenovo ', 'hp ', 'dell ', 'msi ',
+    ]
+    
+    for prefix in manufacturer_prefixes:
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+    
+    # Normalize whitespace
+    name = re.sub(r'\s+', ' ', name).strip()
+    
+    # Remove common punctuation that doesn't affect model identity
+    name = re.sub(r'[\-\(\)\,;:]/?\s*', '', name)
+    name = re.sub(r'\s+', ' ', name).strip()
+    
+    # Normalize common variations
+    # e.g., "9a" vs "9 a" vs "9-A"
+    name = re.sub(r'(\d)\s+([a-z])', r'\1\2', name)  # "9 a" -> "9a"
+    name = re.sub(r'(\d)-([a-z])', r'\1\2', name)     # "9-a" -> "9a"
+    
+    # Normalize "pro max" vs "promax" etc.
+    name = re.sub(r'(\w)\s+(\w)', r'\1\2', name)  # "pro max" -> "promax"
+    
+    # Normalize specific known patterns
+    name = re.sub(r'iphone(\d+)', r'iphone\1', name)
+    name = re.sub(r'galaxy[s\s]*(\w+)', r'galaxys\1', name)
+    
+    return name.strip()
