@@ -60,3 +60,9 @@ class TestConfig:
         assert hasattr(config, 'REVIEW_DELAY')
         assert isinstance(config.MAX_REVIEW_RESULTS, int)
         assert isinstance(config.REVIEW_DELAY, float)
+
+    def test_default_max_results(self):
+        """Test that DEFAULT_MAX_RESULTS is defined."""
+        assert hasattr(config, 'DEFAULT_MAX_RESULTS')
+        assert isinstance(config.DEFAULT_MAX_RESULTS, int)
+        assert config.DEFAULT_MAX_RESULTS > 0
