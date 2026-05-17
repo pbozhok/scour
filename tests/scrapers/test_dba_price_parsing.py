@@ -49,6 +49,16 @@ class TestDBAPriceParsing:
         text = "MAC MINI M4 16/256 med skærm 27\", 12.999 kr"
         assert parse_price(text) == 12999.0
 
+    def test_price_with_non_breaking_space(self):
+        """Test price with non-breaking space (\\xa0) - e.g., '1.500\\xa0kr.' from Kali Audio LP-6 listing."""
+        # This was the bug: non-breaking space wasn't being removed, causing parse to fail
+        assert parse_price("1.500\xa0kr.") == 1500.0
+        assert parse_price("1.500\xa0kr") == 1500.0
+
+    def test_price_with_thin_space(self):
+        """Test price with thin space (\\u2009)."""
+        assert parse_price("1.500\u2009kr.") == 1500.0
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

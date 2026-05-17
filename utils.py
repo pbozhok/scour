@@ -69,8 +69,8 @@ def parse_price(text: str) -> float:
         # Remove currency designations - keep digits, dots, commas, spaces
         price_str = re.sub(r'[^\d\.\,\s]', '', price_str)
         
-        # Remove all spaces
-        price_str = price_str.replace(' ', '')
+        # Remove all whitespace (including non-breaking spaces, thin spaces, etc.)
+        price_str = re.sub(r'\s', '', price_str)
         
         # Handle Danish format: dots are thousand separators, comma is decimal
         # If we have both dots and commas, dots are thousand separators
