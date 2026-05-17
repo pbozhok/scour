@@ -2,7 +2,6 @@
 Base scraper class with common functionality for all platform scrapers.
 """
 
-from abc import ABC, abstractmethod
 from typing import Optional
 
 from rich.console import Console
@@ -14,8 +13,8 @@ import config
 console = Console()
 
 
-class BaseScraper(ABC):
-    """Abstract base class for platform-specific scrapers."""
+class BaseScraper:
+    """Base class for platform-specific scrapers."""
     
     platform: str = "Unknown"
     
@@ -30,10 +29,10 @@ class BaseScraper(ABC):
         self.headers = headers or config.HEADERS
         self.debug = debug
     
-    @abstractmethod
-    async def scrape(self, query: str, max_results: int = 20) -> list[Listing]:
+    async def scrape(self, query: str, max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:
         """
         Scrape listings for the given query.
+        Base implementation returns empty list - subclasses should override.
         
         Args:
             query: The search query
@@ -42,7 +41,7 @@ class BaseScraper(ABC):
         Returns:
             List of Listing objects
         """
-        pass
+        return []
     
     def log_debug(self, message: str):
         """Print debug message if debug mode is enabled."""

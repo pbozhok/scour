@@ -21,7 +21,7 @@ class TraderaScraper(BaseScraper):
     
     platform = "Tradera"
     
-    async def scrape(self, query: str, max_results: int = 20) -> list[Listing]:
+    async def scrape(self, query: str, max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:
         """
         Scrape Tradera listings from search results.
         """
@@ -43,7 +43,21 @@ class TraderaScraper(BaseScraper):
                     cards = soup.find_all("div", class_=re.compile(r"item|product|listing"))
                     self.log_debug(f"[blue]Tradera: Found {len(cards)} cards with alternative selector[/blue]")
                 
-                cards = cards[:max_results]
+                # Filter to ensure we have actual item containers
+                # Each card should contain at least one link to an item
+                filtered_cards = []
+                for card in cards:
+                    # Check if card contains a link to an item page
+                    link = card.select_one('a[href*="/item/"]')
+                    if link and link.get('href'):
+                        filtered_cards.append(card)
+                
+                self.log_debug(f"[blue]Tradera: {len(filtered_cards)} valid cards after link filtering[/blue]")
+                
+                if not filtered_cards:
+                    filtered_cards = cards  # Fall back to all
+                
+                cards = filtered_cards[:max_results]
 
                 seen_urls = set()
                 for card in cards:

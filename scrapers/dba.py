@@ -21,7 +21,7 @@ class DBAScraper(BaseScraper):
     
     platform = "DBA"
     
-    async def scrape(self, query: str, max_results: int = 20) -> list[Listing]:
+    async def scrape(self, query: str, max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:
         """
         Scrape DBA listings using the recommerce URL structure.
         Search page: https://www.dba.dk/recommerce/forsale/search?q=...
@@ -34,18 +34,30 @@ class DBAScraper(BaseScraper):
                 resp = await s.get(url)
                 soup = BeautifulSoup(resp.text, "html.parser")
 
-                # Try multiple selector strategies
+                # Try multiple selector strategies - look for listing cards/containers first
+                # DBA listings are typically in div/article elements with specific classes
                 cards = soup.select('a[href*="/recommerce/forsale/item/"]')
                 
-                self.log_debug(f"[blue]DBA: Found {len(cards)} cards with primary selector[/blue]")
+                # Filter to only those that are likely actual listing cards
+                # by checking if they're inside a listing container (div, article, li, etc.)
+                filtered_cards = []
+                for card in cards:
+                    parent = card.parent
+                    # Check if parent looks like a listing container
+                    if parent and parent.name in ('div', 'article', 'li', 'section'):
+                        # Additional check: parent should have some content (not just a nav link)
+                        parent_text = parent.get_text(strip=True)
+                        if len(parent_text) > 10:  # Has meaningful content
+                            filtered_cards.append(card)
+                
+                self.log_debug(f"[blue]DBA: Found {len(cards)} cards with primary selector, {len(filtered_cards)} after filtering[/blue]")
                 
                 # If no cards found, try alternative selectors
-                if not cards:
-                    # Look for any anchor tags with recommerce item URLs
-                    cards = [a for a in soup.find_all('a') if '/recommerce/forsale/item/' in a.get('href', '')]
-                    self.log_debug(f"[blue]DBA: Found {len(cards)} cards with alternative selector[/blue]")
+                if not filtered_cards:
+                    filtered_cards = cards  # Fall back to all cards
+                    self.log_debug(f"[blue]DBA: Using all cards as fallback[/blue]")
                 
-                cards = cards[:max_results]
+                cards = filtered_cards[:max_results]
 
                 seen_urls = set()
                 for i, card in enumerate(cards):
@@ -81,37 +93,74 @@ class DBAScraper(BaseScraper):
                         else:
                             continue
                     
-                    # Clean title if it contains price info
-                    title_parts = re.split(r'\d+\s*kr|kr\.|dkk', title, flags=re.IGNORECASE)
+                    # Clean title if it contains price info (e.g., "MAC MINI M4 - 12999 kr")
+                    title_parts = re.split(r'\d+\s*(kr|dkk|eur|€|\$)|(kr|dkk|eur|€|\$)\s*\d+|\d+[.,\s]\d+\s*(kr|dkk|eur|€|\$)', title, flags=re.IGNORECASE)
                     title = title_parts[0].strip() if title_parts else title
                     
-                    # Price: first look within the card itself
-                    price_el = card.find(
-                        lambda tag: tag.name in ("span", "div", "p")
-                        and "kr" in tag.get_text().lower()
-                        and len(tag.get_text(strip=True)) < 30
-                    )
+                    # Price: first look for common price patterns in the card
+                    # Try elements with price-related classes first
+                    price_el = None
+                    price_text = ""
                     
-                    # If not found in card, look in parent container
-                    if not price_el and card.parent:
-                        price_el = card.parent.find(
+                    # Search in card, then parent, then broader
+                    for search_area in [card, card.parent if card.parent else None, None]:
+                        if not search_area:
+                            continue
+                        
+                        # Try specific price class patterns
+                        price_el = search_area.select_one('[class*="price"], [class*="pris"], [class*="amount"], [class*="beløb"]')
+                        if price_el:
+                            price_text = price_el.get_text(strip=True)
+                            self.log_debug(f"[blue]DBA price class match: {price_text}[/blue]")
+                            break
+                        
+                        # Try data-price attribute
+                        price_el = search_area.select_one('[data-price], [data-price], [data-amount]')
+                        if price_el:
+                            price_text = price_el.get('data-price', '') or price_el.get('data-amount', '') or price_el.get_text(strip=True)
+                            self.log_debug(f"[blue]DBA price data attr: {price_text}[/blue]")
+                            break
+                        
+                        # Try finding elements with price-like numeric patterns
+                        for tag in search_area.find_all(['span', 'div', 'p', 'strong', 'b', 'price']):
+                            text = tag.get_text(strip=True)
+                            # Look for patterns like "12.999", "12999", "12 999" with optional kr/dkk
+                            if re.search(r'\d{1,3}[\.\s,]\d{3,}(\s*(kr|dkk))?', text, re.IGNORECASE):
+                                price_el = tag
+                                price_text = text
+                                self.log_debug(f"[blue]DBA price pattern match: {price_text}[/blue]")
+                                break
+                        
+                        if price_el:
+                            break
+                    
+                    # Last resort: use the original method
+                    if not price_el:
+                        price_el = card.find(
                             lambda tag: tag.name in ("span", "div", "p")
                             and "kr" in tag.get_text().lower()
                             and len(tag.get_text(strip=True)) < 30
                         )
+                        if price_el:
+                            price_text = price_el.get_text(strip=True)
+                        elif card.parent:
+                            price_el = card.parent.find(
+                                lambda tag: tag.name in ("span", "div", "p")
+                                and "kr" in tag.get_text().lower()
+                                and len(tag.get_text(strip=True)) < 30
+                            )
+                            if price_el:
+                                price_text = price_el.get_text(strip=True)
                     
-                    # If still not found, try a broader search
-                    if not price_el:
-                        search_area = card.parent if card.parent else card
-                        for el in search_area.find_all(['span', 'div', 'p', 'strong', 'b']):
-                            text = el.get_text(strip=True)
-                            if re.search(r'\d+.*kr', text, re.IGNORECASE) and len(text) < 50:
-                                price_el = el
-                                self.log_debug(f"[blue]DBA broad price search found: {text}[/blue]")
-                                break
+                    if not price_text:
+                        price_text = "0"
                     
-                    price_text = price_el.get_text(strip=True) if price_el else "0"
                     price = self.parse_price(price_text)
+                    
+                    # For very low prices from DKK listings, this might be a parsing error
+                    # 12999 DKK should be ~1700 EUR, not 2 EUR
+                    if price < 10 and price > 0 and listing.currency == "DKK":
+                        self.log_debug(f"[yellow]DBA suspicious low price: {price} DKK for {title[:50]}[/yellow]")
                     
                     if self.debug:
                         if price_el:

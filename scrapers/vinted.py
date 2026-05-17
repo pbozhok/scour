@@ -5,9 +5,9 @@ Vinted scraper - for vinted.dk second-hand listings.
 import asyncio
 
 from rich.console import Console
-
 from models import Listing
 from scrapers.base import BaseScraper
+import config
 
 console = Console()
 
@@ -17,7 +17,7 @@ class VintedScraper(BaseScraper):
     
     platform = "Vinted"
     
-    async def scrape(self, query: str, max_results: int = 20) -> list[Listing]:
+    async def scrape(self, query: str, max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:
         """
         Scrape Vinted listings using the vinted-scraper package.
         Uses the synchronous scraper in a thread to avoid blocking the event loop.
