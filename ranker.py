@@ -77,11 +77,13 @@ class Ranker:
 
         prompt = f"""The user is looking for: "{user_query}"
 
-Score each of the following second-hand listings from 1 to 10 based on:
+Score each of the following second-hand listings. First, give a score from 1 to 10 for each of these categories (1 = poor, 10 = excellent):
+- Price (compared to typical market price for this item)
 - Value for money (price vs. typical market price)
 - How well it matches the user's stated need
 - Condition and quality indicators from the title AND description (mentions of new/unused, damage, original packaging, accessories included, etc.)
 - Review quality (positive reviews = higher score)
+Then, provide an overall score from 1 to 10 for each listing based on these factors.
 
 Pay special attention to the description field which contains important details about the item's condition and what's included.
 

@@ -44,6 +44,7 @@ def extract_json(text: str) -> Optional[dict | list]:
 def parse_price(text: str) -> float:
     """
     Extract price amount from text like '4999 kr', '3.200 kr', '3 200 kr', '900 SEK', etc.
+    Handles Danish/European number formats where . is thousand separator and , is decimal.
     
     Args:
         text: The text containing price information
@@ -54,21 +55,51 @@ def parse_price(text: str) -> float:
     if not text:
         return 0.0
     
+    text = text.strip()
+    
     # Try to match pattern: digits (with optional separators) followed by kr/dkk/sek/eur
-    match = re.search(r'(\d+[\.\s,]?)*\d+\s*(?:kr|dkk|sek|eur)?', text, re.IGNORECASE)
+    # First try with currency symbol (more specific)
+    match = re.search(r'(\d{1,3}[\.\s,])*\d+(?:[.,]\d{1,2})?\s*(?:kr|dkk|sek|eur|€|\$)', text, re.IGNORECASE)
+    if not match:
+        # Try without requiring currency
+        match = re.search(r'(\d{1,3}[\.\s,])*\d+(?:[.,]\d{1,2})?', text)
     if match:
         # Extract the matched number part
         price_str = match.group(0)
-        # Remove currency designations and separators
-        price_str = re.sub(r'[^\d\.\,]', '', price_str)
-        # Handle both . and , as decimal separators
-        price_str = price_str.replace(',', '.')
+        # Remove currency designations - keep digits, dots, commas, spaces
+        price_str = re.sub(r'[^\d\.\,\s]', '', price_str)
         
-        # Handle thousand separators (remove them if multiple dots found)
-        dots = price_str.count('.')
-        if dots > 1:
-            # Multiple dots = thousand separators, remove all
+        # Remove all spaces
+        price_str = price_str.replace(' ', '')
+        
+        # Handle Danish format: dots are thousand separators, comma is decimal
+        # If we have both dots and commas, dots are thousand separators
+        if '.' in price_str and ',' in price_str:
+            # Remove thousand separators (dots), keep comma as decimal
             price_str = price_str.replace('.', '')
+            # Replace comma with dot for float parsing
+            price_str = price_str.replace(',', '.')
+        elif '.' in price_str:
+            # Could be thousand separator (Danish: 12.999 = 12999) or decimal (12.99)
+            # If we have multiple dots, they're thousand separators
+            dots = price_str.count('.')
+            if dots > 1:
+                price_str = price_str.replace('.', '')
+            elif ',' in price_str:
+                # Has both dot and comma - dot is thousand separator
+                price_str = price_str.replace('.', '')
+                price_str = price_str.replace(',', '.')
+            else:
+                # Single dot - could be thousand separator or decimal
+                # In Danish context, assume it's a thousand separator if the part before dot is 1-3 digits
+                # and part after is 3 digits (e.g., "12.999")
+                parts = price_str.split('.')
+                if len(parts) == 2 and len(parts[0]) <= 3 and len(parts[1]) == 3:
+                    # Likely thousand separator: 12.999 = 12999
+                    price_str = parts[0] + parts[1]
+        elif ',' in price_str:
+            # Comma is decimal separator
+            price_str = price_str.replace(',', '.')
         
         try:
             return float(price_str) if price_str else 0.0

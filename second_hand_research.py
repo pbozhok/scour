@@ -95,7 +95,7 @@ async def log_listings(listings: list[Listing]):
             console.print(f"[blue]{listing.platform}[/blue]: {listing.title} - {listing.price} {listing.currency} ({listing.url})")
 
 
-async def scrape_all(query: str, max_results: int = 20) -> list[Listing]:
+async def scrape_all(query: str, max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:
     """Run all three scrapers concurrently and log listings if debug is enabled."""
     # Initialize scraper instances
     dba_scraper = DBAScraper(debug=args.debug)
@@ -828,7 +828,7 @@ def display_results(listings: list[Listing], user_query: str, skip_reviews: bool
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
-async def research(user_query: str, max_per_platform: int = 20, skip_reviews: bool = False) -> None:
+async def research(user_query: str, max_per_platform: int = config.DEFAULT_MAX_RESULTS, skip_reviews: bool = False) -> None:
     console.print(f"\n[bold green]Researching:[/bold green] {user_query}\n")
     console.rule()
 

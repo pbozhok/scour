@@ -60,6 +60,27 @@ class TestModelExtractor:
         result = asyncio.run(extractor.extract_models(listings))
         assert listings[0].product_model == "iPhone 15 Pro"
 
+    def test_extract_models_from_description(self, mock_llm_client):
+        """Test extracting models from description when title is generic."""
+        mock_response = '{"results": [{"id": 0, "model": "Mac Mini M4"}]}'
+        mock_llm_client.chat = AsyncMock(return_value=mock_response)
+        
+        extractor = ModelExtractor(mock_llm_client, debug=False)
+        listings = [
+            Listing(
+                title="Apple Mac Mini",
+                price=12999.0,
+                currency="DKK",
+                url="url1",
+                description="MAC MINI M4 16/256 med skærm 27\", keyboard, mus og kabler alt nyt",
+                platform="DBA",
+                product_model="",
+            ),
+        ]
+        result = asyncio.run(extractor.extract_models(listings))
+        # The LLM should use the description to find "M4" model
+        assert listings[0].product_model == "Mac Mini M4"
+
     def test_extract_models_with_list_response(self, mock_llm_client):
         """Test extracting models with LLM returning a list."""
         mock_response = '[{"id": 0, "model": "Samsung Galaxy S23"}]'

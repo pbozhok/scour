@@ -51,12 +51,14 @@ class ModelExtractor:
             batch = listings[i : i + batch_size]
 
             items_json = json.dumps(
-                [{"id": j, "title": listing.title} for j, listing in enumerate(batch)],
+                [{"id": j, "title": listing.title, "description": listing.description[:200]} 
+                 for j, listing in enumerate(batch)],
                 ensure_ascii=False,
             )
 
-            prompt = f"""From each listing title below, extract the most specific product model name
+            prompt = f"""From each listing below, extract the most specific product model name
 suitable for a Google search to find professional reviews.
+Use both the title and description to identify the model.
 If you cannot determine a specific model, return an empty string.
 
 Return ONLY this JSON format:
