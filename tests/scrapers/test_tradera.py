@@ -27,12 +27,30 @@ class TestTraderaScraper:
     async def test_tradera_scraper_scrape(self, mock_client):
         """Test TraderaScraper scrape method."""
         mock_resp = MagicMock()
+        # HTML with __NEXT_DATA__ JSON
         mock_resp.text = '''
         <html><body>
-            <div id="item-card-1">
-                <a href="/en/item/260103/12345/test-item">Test Item</a>
-                <span>100 SEK</span>
-            </div>
+            <script id="__NEXT_DATA__" type="application/json">{
+                "props": {
+                    "pageProps": {
+                        "initialState": {
+                            "discover": {
+                                "items": [
+                                    {
+                                        "itemId": 12345,
+                                        "shortDescription": "Test Item",
+                                        "price": 100,
+                                        "buyNowPrice": 150,
+                                        "itemUrl": "https://www.tradera.com/en/item/260103/12345/test-item",
+                                        "startDate": "2024-01-15T10:30:00.000Z",
+                                        "categoryId": 260103
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }</script>
         </body></html>
         '''
         mock_resp.raise_for_status = AsyncMock()
@@ -44,9 +62,13 @@ class TestTraderaScraper:
         listings = await scraper.scrape("test", max_results=10)
         
         # Check that listings have required fields
-        for listing in listings:
-            assert isinstance(listing, Listing)
-            assert listing.platform == "Tradera"
+        assert len(listings) == 1
+        assert isinstance(listings[0], Listing)
+        assert listings[0].platform == "Tradera"
+        assert listings[0].title == "Test Item"
+        assert listings[0].price == 150.0  # Should use buyNowPrice
+        assert listings[0].currency == "SEK"
+        assert "12345" in listings[0].url
 
     @patch('httpx.AsyncClient')
     async def test_tradera_scraper_date_extraction(self, mock_client):
@@ -71,6 +93,33 @@ class TestTraderaScraper:
         
         # Check that listings were created
         assert len(listings) >= 0
+
+    @patch('httpx.AsyncClient')
+    async def test_tradera_scraper_html_fallback(self, mock_client):
+        """Test TraderaScraper falls back to HTML parsing when no __NEXT_DATA__."""
+        mock_resp = MagicMock()
+        # HTML without __NEXT_DATA__ (fallback to HTML parsing)
+        mock_resp.text = '''
+        <html><body>
+            <div id="item-card-1">
+                <a href="/en/item/260103/12345/test-item">Test Item</a>
+                <span>200 SEK</span>
+            </div>
+        </body></html>
+        '''
+        mock_resp.raise_for_status = AsyncMock()
+        
+        mock_client.return_value.__aenter__.return_value = mock_client
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        
+        scraper = TraderaScraper(debug=False)
+        listings = await scraper.scrape("test", max_results=10)
+        
+        # Check that listings have required fields
+        assert len(listings) >= 1
+        assert isinstance(listings[0], Listing)
+        assert listings[0].platform == "Tradera"
+        assert listings[0].currency == "SEK"
 
     def test_tradera_scraper_empty_results(self):
         """Test Tradera scraper handles empty results."""
