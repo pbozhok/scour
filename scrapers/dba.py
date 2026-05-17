@@ -157,10 +157,10 @@ class DBAScraper(BaseScraper):
                     
                     price = self.parse_price(price_text)
                     
-                    # For very low prices from DKK listings, this might be a parsing error
-                    # 12999 DKK should be ~1700 EUR, not 2 EUR
-                    if price < 10 and price > 0 and listing.currency == "DKK":
-                        self.log_debug(f"[yellow]DBA suspicious low price: {price} DKK for {title[:50]}[/yellow]")
+                    # For very low prices, this might be a parsing error
+                    # DBA uses DKK, so prices should typically be > 10
+                    if price < 10 and price > 0:
+                        self.log_debug(f"[yellow]DBA suspicious low price: {price} for {title[:50]}[/yellow]")
                     
                     if self.debug:
                         if price_el:
