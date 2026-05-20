@@ -5,6 +5,7 @@
 
 # Agent files
 agents/
+.vibe/
 
 # Python
 __pycache__/
