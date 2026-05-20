@@ -40,6 +40,7 @@ from models import Listing
 from utils import extract_json, parse_price, normalize_model_name
 from llm import get_client
 from scrapers import DBAScraper, VintedScraper, TraderaScraper
+from processors.query_preprocessor import QueryPreprocessor, preprocess_query
 
 # Add argument parsing for debug flag
 parser = argparse.ArgumentParser(description="Second-hand product research agent")
@@ -49,6 +50,8 @@ parser.add_argument("--no-filter", action="store_true", help="Skip LLM-based fil
 parser.add_argument("--no-score", action="store_true", help="Skip LLM-based scoring (sort by price instead)")
 parser.add_argument("--llm", type=str, default="gemini", choices=["gemini", "mistral"], help="LLM backend to use (default: gemini)")
 parser.add_argument("--currency", type=str, default="EUR", choices=["EUR", "DKK", "SEK"], help="Target currency (default: EUR)")
+parser.add_argument("--no-preprocess", action="store_true", help="Skip query pre-processing (use query as-is for scraping)")
+parser.add_argument("--max-keywords", type=int, default=8, help="Maximum number of generated search keywords (default: 8)")
 parser.add_argument("query", type=str, help="The search query for second-hand listings")
 args = parser.parse_args()
 
@@ -95,20 +98,36 @@ async def log_listings(listings: list[Listing]):
             console.print(f"[blue]{listing.platform}[/blue]: {listing.title} - {listing.price} {listing.currency} ({listing.url})")
 
 
-async def scrape_all(query: str, max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:
-    """Run all three scrapers concurrently and log listings if debug is enabled."""
+async def scrape_all(queries: list[str], max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:
+    """
+    Run all three scrapers concurrently for multiple queries and log listings if debug is enabled.
+    
+    Args:
+        queries: List of search queries to use (from query pre-processing)
+        max_results: Maximum results per query per platform
+        
+    Returns:
+        Combined list of all listings from all queries and platforms
+    """
     # Initialize scraper instances
     dba_scraper = DBAScraper(debug=args.debug)
     vinted_scraper = VintedScraper(debug=args.debug)
     tradera_scraper = TraderaScraper(debug=args.debug)
     
-    # Run all scrapers concurrently
-    results = await asyncio.gather(
-        dba_scraper.scrape(query, max_results),
-        vinted_scraper.scrape(query, max_results),
-        tradera_scraper.scrape(query, max_results),
-    )
-    all_listings = [l for platform in results for l in platform]
+    all_listings = []
+    
+    for query in queries:
+        console.print(f"[bold cyan]Scraping with query: {query}[/bold cyan]")
+        
+        # Run all scrapers concurrently for this query
+        results = await asyncio.gather(
+            dba_scraper.scrape(query, max_results),
+            vinted_scraper.scrape(query, max_results),
+            tradera_scraper.scrape(query, max_results),
+        )
+        query_listings = [l for platform in results for l in platform]
+        all_listings.extend(query_listings)
+    
     console.print(f"\n[bold]Total raw listings:[/bold] {len(all_listings)}\n")
 
     # Log all listings if debug is enabled
@@ -144,6 +163,35 @@ async def convert_prices(listings: list[Listing], target_currency: str) -> None:
                 listing.currency = target_currency
         
         console.print("")
+
+
+# ── 2.5. Deduplication ────────────────────────────────────────────────────────
+
+async def remove_duplicates(listings: list[Listing]) -> tuple[list[Listing], int]:
+    """
+    Remove duplicate listings based on URL.
+    
+    When searching with multiple queries, the same listing might be found multiple times.
+    This function removes duplicates while keeping the first occurrence.
+    
+    Args:
+        listings: List of listings potentially containing duplicates
+        
+    Returns:
+        Tuple of (deduplicated_listings, num_duplicates_removed)
+    """
+    seen_urls = set()
+    unique_listings = []
+    duplicates_removed = 0
+    
+    for listing in listings:
+        if listing.url in seen_urls:
+            duplicates_removed += 1
+        else:
+            seen_urls.add(listing.url)
+            unique_listings.append(listing)
+    
+    return unique_listings, duplicates_removed
 
 
 # ── 3. Relevance filtering ─────────────────────────────────────────────────────
@@ -876,9 +924,29 @@ async def research(user_query: str, max_per_platform: int = config.DEFAULT_MAX_R
     console.print(f"\n[bold green]Researching:[/bold green] {user_query}\n")
     console.rule()
 
+    # Stage 0 — pre-process query (optional)
+    if not args.no_preprocess:
+        console.print("[bold cyan]Step 0: Pre-processing query...[/bold cyan]")
+        preprocessor = QueryPreprocessor(llm_client=llm_client, debug=args.debug)
+        cleaned_query = preprocessor.clean_query(user_query)
+        search_queries = await preprocessor.generate_search_queries(
+            user_query, 
+            max_keywords=args.max_keywords
+        )
+        console.print(f"  [dim]Original query: {user_query}[/dim]")
+        console.print(f"  [dim]Cleaned query: {cleaned_query}[/dim]")
+        console.print(f"  [dim]Search queries: {search_queries}[/dim]")
+        # Use cleaned query for filtering and display, but search with all queries
+        display_query = cleaned_query
+    else:
+        # No pre-processing: use original query as-is
+        cleaned_query = user_query
+        search_queries = [cleaned_query]
+        display_query = cleaned_query
+    
     # Stage 1 — scrape
     console.print("[bold cyan]Step 1: Scraping listings...[/bold cyan]")
-    all_listings = await scrape_all(user_query, max_results=max_per_platform)
+    all_listings = await scrape_all(search_queries, max_results=max_per_platform)
 
     if not all_listings:
         console.print("[red]No listings found. Check your scraper selectors.[/red]")
@@ -887,8 +955,14 @@ async def research(user_query: str, max_per_platform: int = config.DEFAULT_MAX_R
     # Stage 2 — convert prices to target currency
     await convert_prices(all_listings, args.currency)
 
-    # Stage 3 — filter
-    relevant = await filter_listings(all_listings, user_query)
+    # Stage 2.5 — remove duplicates (important when using multiple search queries)
+    console.print("[bold cyan]Step 2.5: Removing duplicates...[/bold cyan]")
+    all_listings, duplicates_removed = await remove_duplicates(all_listings)
+    if duplicates_removed > 0:
+        console.print(f"  [dim]Removed {duplicates_removed} duplicate listing(s)[/dim]\n")
+
+    # Stage 3 — filter (use cleaned_query for intent-based filtering)
+    relevant = await filter_listings(all_listings, cleaned_query)
 
     if not relevant:
         console.print("[yellow]No relevant listings after filtering.[/yellow]")
@@ -899,7 +973,7 @@ async def research(user_query: str, max_per_platform: int = config.DEFAULT_MAX_R
 
     # Stage 4.6 — second LLM filter pass with full descriptions
     console.print("[bold cyan]Step 4.6: Second filtering pass with full descriptions...[/bold cyan]")
-    relevant = await filter_listings(relevant, user_query)
+    relevant = await filter_listings(relevant, cleaned_query)
 
     # Stage 5 — extract models and reviews (optional)
     if not skip_reviews:
@@ -909,10 +983,10 @@ async def research(user_query: str, max_per_platform: int = config.DEFAULT_MAX_R
         console.print("[bold cyan]Step 5: Skipping review extraction (--no-reviews flag)[/bold cyan]\n")
 
     # Stage 6 — score & rank
-    ranked = await score_and_rank(relevant, user_query)
+    ranked = await score_and_rank(relevant, cleaned_query)
 
-    # Stage 7 — display
-    display_results(ranked, user_query, skip_reviews=skip_reviews)
+    # Stage 7 — display (use display_query which is the cleaned version)
+    display_results(ranked, display_query, skip_reviews=skip_reviews)
 
 
 if __name__ == "__main__":
