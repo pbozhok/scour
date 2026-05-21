@@ -92,10 +92,13 @@ class QueryPreprocessorModule(Module):
             
             # Generate search queries
             max_keywords = context.config.get("max_keywords", 8)
-            search_queries = await self._preprocessor.generate_search_queries(
-                context.query,
-                max_keywords=max_keywords
-            )
+            # Generate max_keywords - 1 additional keywords, then prepend cleaned query
+            # This ensures total search queries = max_keywords
+            additional_keywords = max_keywords - 1
+            keywords = await self._preprocessor.generate_keywords(context.query, max_keywords=additional_keywords)
+            
+            # Build search queries: cleaned query + generated keywords
+            search_queries = [cleaned_query] + keywords
             
             # Store in metadata
             context.set_metadata("cleaned_query", cleaned_query)
