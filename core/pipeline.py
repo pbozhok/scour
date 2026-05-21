@@ -126,9 +126,9 @@ class Pipeline:
             logger.info("Processing complete", extra={"listing_count": len(context.listings)})
             
             # Stage 3: Filtering (1st pass) - initial relevance filtering
-            if not config.skip_filter:
-                context = await self._execute_stage(ModuleType.FILTER, context)
-                logger.info("Filtering pass 1 complete", extra={"listing_count": len(context.listings)})
+            # When skip_filter=True, use keyword filter; otherwise use LLM filter
+            context = await self._execute_filter_pass(context, use_llm=not config.skip_filter, pass_num=1)
+            logger.info("Filtering pass 1 complete", extra={"listing_count": len(context.listings)})
             
             # Stage 4: Processing - fetch descriptions for relevant items
             # Run only description fetcher, not all processors
@@ -136,9 +136,9 @@ class Pipeline:
             logger.info("Description fetching complete", extra={"listing_count": len(context.listings)})
             
             # Stage 5: Filtering (2nd pass) - filtering with full descriptions
-            if not config.skip_filter:
-                context = await self._execute_stage(ModuleType.FILTER, context)
-                logger.info("Filtering pass 2 complete", extra={"listing_count": len(context.listings)})
+            # Use the same filter type as pass 1
+            context = await self._execute_filter_pass(context, use_llm=not config.skip_filter, pass_num=2)
+            logger.info("Filtering pass 2 complete", extra={"listing_count": len(context.listings)})
             
             # Stage 6: Processing - extract product models
             context = await self._execute_model_extractors(context)
@@ -248,6 +248,51 @@ class Pipeline:
                         error_type="PROCESSOR_ERROR",
                         message=str(e)
                     )
+        return context
+    
+    async def _execute_filter_pass(self, context: PipelineContext, use_llm: bool = True, pass_num: int = 1) -> PipelineContext:
+        """
+        Execute a single filter pass with the appropriate filter type.
+        
+        Args:
+            context: The pipeline context
+            use_llm: If True, use LLM filter; if False, use keyword filter
+            pass_num: Which pass number (for logging)
+            
+        Returns:
+            Modified context with filtered listings
+        """
+        modules = self._modules.get(ModuleType.FILTER, [])
+        filter_module = None
+        
+        # Select the appropriate filter
+        if use_llm:
+            for module in modules:
+                if module.name == "llm-filter":
+                    filter_module = module
+                    break
+        else:
+            for module in modules:
+                if module.name == "keyword-filter":
+                    filter_module = module
+                    break
+        
+        if filter_module:
+            try:
+                if not hasattr(filter_module, '_initialized') or not filter_module._initialized:
+                    filter_module.initialize(context.config)
+                context = await filter_module.execute(context)
+                logger.debug("Filter pass {} completed", extra={"pass_num": pass_num, "filter": filter_module.name})
+            except Exception as e:
+                logger.error("Filter pass {} failed", extra={"pass_num": pass_num, "filter": filter_module.name, "error": str(e)})
+                context.add_error(
+                    module_name=filter_module.name,
+                    error_type="FILTER_ERROR",
+                    message=str(e)
+                )
+        else:
+            logger.warning("No filter module found", extra={"use_llm": use_llm, "pass_num": pass_num})
+        
         return context
     
     async def _execute_stage(self, module_type: ModuleType, context: PipelineContext) -> PipelineContext:
