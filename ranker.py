@@ -9,8 +9,10 @@ from rich.console import Console
 from models import Listing
 from llm import LLMClient
 from utils import extract_json
+from core.logging import get_logger
 
 console = Console()
+logger = get_logger(__name__, module_name="ranker")
 
 
 class Ranker:

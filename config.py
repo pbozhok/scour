@@ -20,6 +20,12 @@ GEMINI_URL = (
     f"/models/{GEMINI_MODEL}:generateContent"
 )
 
+# LLM Providers mapping for dependency injection
+LLM_PROVIDERS = {
+    "gemini": "llm.client.GeminiClient",
+    "mistral": "llm.client.MistralClient",
+}
+
 # ── HTTP Configuration ────────────────────────────────────────────────────────
 
 HEADERS = {

@@ -9,8 +9,10 @@ from bs4 import BeautifulSoup
 from rich.console import Console
 
 import config
+from core.logging import get_logger
 
 console = Console()
+logger = get_logger(__name__, module_name="reviewers.search")
 
 
 class ReviewSearcher:

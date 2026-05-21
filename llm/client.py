@@ -1,5 +1,8 @@
 """
 LLM Client abstraction for Gemini and Mistral backends.
+
+Provides concrete LLM client implementations that can be used by other modules.
+These clients inherit from BaseLLMClient to follow the Module interface.
 """
 
 import asyncio
@@ -10,14 +13,50 @@ from typing import Optional
 import httpx
 from rich.console import Console
 
-import config
-from utils import extract_json
+from core.logging import get_logger
+from llm.base import BaseLLMClient
 
 console = Console()
+logger = get_logger(__name__, module_name="llm.client")
 
 
-class LLMClient:
-    """Base class for LLM backends."""
+class LLMClient(BaseLLMClient):
+    """
+    Intermediate base class for LLM backends.
+    
+    Inherits from BaseLLMClient which provides the Module interface.
+    This class adds convenience methods that all LLM clients can use.
+    """
+    
+    name: str = "llm-client"
+    module_type = None  # Subclasses must set this
+    version: str = "1.0.0"
+    
+    def __init__(self):
+        """Initialize the LLM client."""
+        self._initialized = False
+    
+    def initialize(self, config: dict) -> bool:
+        """
+        Initialize the LLM client with configuration.
+        
+        Args:
+            config: Configuration dictionary
+             
+        Returns:
+            True if initialization succeeded
+        """
+        self._initialized = True
+        return True
+    
+    def validate(self) -> bool:
+        """
+        Validate the client is properly configured.
+        
+        Returns:
+            True if valid
+        """
+        return self._initialized
     
     async def chat(
         self,
@@ -25,8 +64,21 @@ class LLMClient:
         temperature: float = 0.0,
         max_retries: int = 5,
     ) -> str:
-        """Send a prompt and get a response."""
-        raise NotImplementedError
+        """
+        Default chat implementation. Subclasses should override this.
+        
+        Args:
+            prompt: The user prompt
+            temperature: Sampling temperature
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            The LLM's response text
+            
+        Raises:
+            NotImplementedError: If subclass doesn't override this method
+        """
+        raise NotImplementedError("Subclasses must implement chat() method")
     
     async def request_json(
         self,
@@ -35,12 +87,17 @@ class LLMClient:
         max_retries: int = 5,
     ) -> Optional[dict | list]:
         """Send a prompt and extract JSON from response."""
+        from utils import extract_json
         response = await self.chat(prompt, temperature, max_retries)
         return extract_json(response)
 
 
 class GeminiClient(LLMClient):
     """Gemini LLM client using the CLI tool."""
+    
+    name: str = "gemini-client"
+    module_type = None  # LLM clients are service objects, not pipeline stages
+    version: str = "1.0.0"
     
     async def chat(
         self,
@@ -112,10 +169,15 @@ class GeminiClient(LLMClient):
 
 
 class MistralClient(LLMClient):
-    """Mistral LLM client."""
+    """Mistral LLM client using the Mistral AI API."""
+    
+    name: str = "mistral-client"
+    module_type = None  # LLM clients are service objects, not pipeline stages
+    version: str = "1.0.0"
     
     def __init__(self):
         """Initialize Mistral client, checking API key and library availability."""
+        super().__init__()
         try:
             from mistralai.client import Mistral
             self.mistral_module = Mistral
@@ -133,9 +195,7 @@ class MistralClient(LLMClient):
         temperature: float = 0.0,
         max_retries: int = 5,
     ) -> str:
-        """
-        Use Mistral AI API to send a prompt and retrieve a response.
-        """
+        """Use Mistral AI API to send a prompt and retrieve a response."""
         for attempt in range(max_retries):
             try:
                 with self.mistral_module(api_key=self.api_key) as mistral:

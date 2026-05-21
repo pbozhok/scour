@@ -14,13 +14,19 @@ from rich.console import Console
 from models import Listing
 from scrapers.base import BaseScraper
 import config
+from core.logging import get_logger
+from core.module import ModuleType
 
 console = Console()
+logger = get_logger(__name__, module_name="scrapers.tradera")
 
 
 class TraderaScraper(BaseScraper):
     """Scraper for Tradera.com second-hand listings."""
     
+    name = "tradera-scraper"
+    module_type = ModuleType.SCRAPER
+    version = "1.0.0"
     platform = "Tradera"
     
     async def scrape(self, query: str, max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:

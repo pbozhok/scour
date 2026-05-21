@@ -1,0 +1,15 @@
+{
+  "workflow": "speckit",
+  "specName": "001-code-modularity",
+  "branch": "001-code-modularity",
+  "selectedAt": "2026-05-20T21:14:17.114Z",
+  "currentStep": "specify",
+  "status": "draft",
+  "stepHistory": {
+    "specify": {
+      "startedAt": "2026-05-20T21:14:18.809Z",
+      "completedAt": null
+    }
+  },
+  "transitions": []
+}

@@ -11,8 +11,10 @@ from models import Listing
 from llm import LLMClient
 from utils import extract_json, normalize_model_name
 from reviewers.search import ReviewSearcher
+from core.logging import get_logger
 
 console = Console()
+logger = get_logger(__name__, module_name="reviewers.summarizer")
 
 
 class ReviewSummarizer:

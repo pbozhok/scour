@@ -1,63 +1,102 @@
 """
 LLM filter - LLM-based relevance filtering for listings.
+
+Implements BaseFilter for the modular pipeline.
 """
 
 import asyncio
 import json
 import random
+from typing import List, Dict, Any
 
 import httpx
 from rich.console import Console
 
 from models import Listing
-from llm import LLMClient
+from llm import LLMClient, get_client
 from utils import extract_json
+from core.module import ModuleType
+from core.logging import get_logger
+from filters.base import BaseFilter
 import config
 
 console = Console()
+logger = get_logger(__name__, module_name="filters.llm_filter")
 
 
-class LLMFilter:
+class LLMFilter(BaseFilter):
     """LLM-based relevance filtering using Gemini or Mistral."""
     
-    def __init__(self, llm_client: LLMClient, debug: bool = False):
+    name = "llm-filter"
+    module_type = ModuleType.FILTER
+    version = "1.0.0"
+    
+    def __init__(self, llm_backend: str = "gemini", debug: bool = False):
         """
         Initialize the filter.
         
         Args:
-            llm_client: The LLM client to use for filtering
+            llm_backend: The LLM backend to use (gemini or mistral)
             debug: Whether to print debug information
         """
-        self.llm_client = llm_client
+        super().__init__()
+        self.llm_backend = llm_backend
         self.debug = debug
+        self._llm_client = None
     
-    async def filter_listings(
-        self,
-        listings: list[Listing],
-        user_query: str,
-        batch_size: int = config.BATCH_SIZE,
-        delay_between_batches: float = config.DELAY_BETWEEN_BATCHES,
-        max_retries: int = config.MAX_RETRIES,
-    ) -> list[Listing]:
+    def initialize(self, config: Dict[str, Any]) -> bool:
+        """
+        Initialize with configuration.
+        
+        Args:
+            config: Configuration dictionary
+            
+        Returns:
+            True if initialization succeeded
+        """
+        self._initialized = True
+        self.llm_backend = config.get("llm_backend", "gemini")
+        self.debug = config.get("debug", False)
+        
+        try:
+            self._llm_client = get_client(self.llm_backend)
+            logger.info("LLMFilter initialized", extra={"llm_backend": self.llm_backend})
+            return True
+        except Exception as e:
+            logger.error("Failed to initialize LLM client", extra={"error": str(e)})
+            return False
+    
+    def validate(self) -> bool:
+        """
+        Validate the module is properly configured.
+        
+        Returns:
+            True if valid
+        """
+        return self._initialized and self._llm_client is not None
+    
+    async def filter(self, listings: List[Any], query: str, context: Dict[str, Any]) -> List[Any]:
         """
         Filters listings for relevance using LLM.
         Processes batches sequentially to avoid rate limits.
         
         Args:
             listings: List of listings to filter
-            user_query: The user's search query
-            batch_size: Number of items per batch
-            delay_between_batches: Delay between batches in seconds
-            max_retries: Maximum number of retries per batch
+            query: The user's search query
+            context: Additional context
             
         Returns:
             Filtered list of relevant listings
         """
-        async def judge_batch(batch: list[Listing]) -> None:
+        batch_size = context.get("batch_size", config.BATCH_SIZE)
+        delay_between_batches = context.get("delay_between_batches", config.DELAY_BETWEEN_BATCHES)
+        max_retries = context.get("max_retries", config.MAX_RETRIES)
+        
+        async def judge_batch(batch: list, user_query: str) -> None:
             items_json = json.dumps(
                 [
-                    {"id": i, "title": listing.title, "description": listing.description[:400]}
-                    for i, listing in enumerate(batch)
+                    {"id": i, "title": getattr(l, 'title', ''), "description": getattr(l, 'description', '')[:400]}
+                    for i, l in enumerate(batch)
                 ],
                 ensure_ascii=False,
             )
@@ -79,7 +118,7 @@ Listings:
 
             for attempt in range(max_retries):
                 try:
-                    raw_response = await self.llm_client.chat(prompt)
+                    raw_response = await self._llm_client.chat(prompt)
                     parsed_response = extract_json(raw_response)
 
                     if isinstance(parsed_response, dict):
@@ -96,7 +135,7 @@ Listings:
                             batch[idx].relevance_reason = verdict.get("reason", "")
                             # Print discarded listings immediately
                             if not batch[idx].relevant and batch[idx].relevance_reason:
-                                console.print(f"  [red]✗ {batch[idx].title}: {batch[idx].relevance_reason}[/red]")
+                                console.print(f"  [red]✗ {getattr(batch[idx], 'title', 'Unknown')}: {batch[idx].relevance_reason}[/red]")
 
                     return
 
@@ -126,23 +165,27 @@ Listings:
             batch_num = i // batch_size + 1
             batch = listings[i:i + batch_size]
             console.print(f"Judging batch {batch_num}/{total_batches} ({len(batch)} items)...")
-            await judge_batch(batch)
+            await judge_batch(batch, query)
 
             # Count discarded in this batch
-            batch_discarded = sum(1 for l in batch if not l.relevant)
+            batch_discarded = sum(1 for l in batch if not getattr(l, 'relevant', False))
             total_discarded += batch_discarded
 
             if i + batch_size < len(listings):
                 await asyncio.sleep(delay_between_batches)
 
-        if not any(listing.relevant for listing in listings):
+        if not any(getattr(l, 'relevant', False) for l in listings):
             console.print("[yellow]No relevant listings found. Marking all as relevant as fallback.[/yellow]")
             for listing in listings:
                 listing.relevant = True
                 listing.relevance_reason = "Fallback: No relevant listings identified by the model."
 
-        relevant_listings = [listing for listing in listings if listing.relevant]
+        relevant_listings = [listing for listing in listings if getattr(listing, 'relevant', False)]
         if total_discarded > 0:
             console.print(f"[bold yellow]{total_discarded} listings discarded[/bold yellow]")
         console.print(f"[bold green]{len(relevant_listings)} relevant listings kept[/bold green]\n")
+        
+        logger.info("LLM filtering complete", 
+                   extra={"kept": len(relevant_listings), "discarded": total_discarded})
+        
         return relevant_listings
