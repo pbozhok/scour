@@ -185,10 +185,6 @@ Listings:
             console.print(f"[bold yellow]{total_discarded} listings discarded[/bold yellow]")
         console.print(f"[bold green]{len(relevant_listings)} relevant listings kept[/bold green]\n")
         
-        # Store discarded count in context metadata for API response
-        if 'metadata' in context:
-            context['metadata']['llm_filtered'] = total_discarded
-        
         logger.info("LLM filtering complete", 
                    extra={"kept": len(relevant_listings), "discarded": total_discarded})
         

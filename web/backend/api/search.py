@@ -109,7 +109,10 @@ async def search_items(
         listings = context.listings
         
         # Get llm_filtered count from metadata
-        llm_filtered = context.metadata.get('llm_filtered', 0) if context.metadata else 0
+        # BaseFilter.execute() sets {module_name}_removed, where module_name is "llm-filter" or "keyword-filter"
+        llm_filtered = 0
+        if context.metadata:
+            llm_filtered = context.metadata.get('llm-filter_removed', 0) or context.metadata.get('keyword-filter_removed', 0)
         
         # Handle empty results
         if not listings:

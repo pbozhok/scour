@@ -504,6 +504,7 @@ function submitSearch() {
             query: data.query || '',
             results: results,
             total_results: data.total_results || data.totalResults || results.length,
+            llm_filtered: data.llm_filtered || 0,
             reviews: data.reviews || {},
             sort_by: data.sort_by || 'score',
             toggles: data.toggles || { filtering: true, reviewing: true, scoring: true }

@@ -88,8 +88,11 @@ class BaseFilter(Module):
             filtered = await self.filter(listings, query, context.config)
             # Clear and add filtered listings
             context.listings = filtered
+            removed_count = len(listings) - len(filtered)
+            # Accumulate removed counts across multiple filter passes
+            existing_removed = context.get_metadata(f"{self.name}_removed", 0)
             context.set_metadata(f"{self.name}_filtered", len(filtered))
-            context.set_metadata(f"{self.name}_removed", len(listings) - len(filtered))
+            context.set_metadata(f"{self.name}_removed", existing_removed + removed_count)
             
         except Exception as e:
             context.add_error(

@@ -53,8 +53,8 @@ DEFAULT_CURRENCY = "EUR"
 
 SCRAPER_TIMEOUT = 20  # seconds
 MAX_RETRIES = 5
-BATCH_SIZE = 20  # For LLM filtering
-DELAY_BETWEEN_BATCHES = 10.0  # seconds
+BATCH_SIZE = 60  # For LLM filtering
+DELAY_BETWEEN_BATCHES = 2.0 # seconds
 DEFAULT_MAX_RESULTS = 40  # Default max results per scraper
 
 # ── Review Configuration ──────────────────────────────────────────────────────
