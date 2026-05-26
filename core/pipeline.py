@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from core.module import Module, ModuleType, PipelineContext, PipelineError
 from core.registry import ModuleRegistry, registry as global_registry
 from core.logging import get_logger
+from config import DEFAULT_MAX_KEYWORDS
 
 logger = get_logger(__name__, module_name="core.pipeline")
 
@@ -21,7 +22,7 @@ class PipelineConfig:
     """Configuration for the pipeline execution."""
     query: str
     max_results: int = 20
-    max_keywords: int = 3
+    max_keywords: int = DEFAULT_MAX_KEYWORDS
     target_currency: str = "EUR"
     llm_backend: str = "gemini"
     skip_preprocess: bool = False

@@ -63,7 +63,7 @@ parser.add_argument("--no-score", action="store_true", help="Skip LLM-based scor
 parser.add_argument("--llm", type=str, default="gemini", choices=["gemini", "mistral"], help="LLM backend to use (default: gemini)")
 parser.add_argument("--currency", type=str, default="EUR", choices=["EUR", "DKK", "SEK"], help="Target currency (default: EUR)")
 parser.add_argument("--no-preprocess", action="store_true", help="Skip query pre-processing (use query as-is for scraping)")
-parser.add_argument("--max-keywords", type=int, default=8, help="Maximum number of generated search keywords (default: 8)")
+parser.add_argument("--max-keywords", type=int, default=config.DEFAULT_MAX_KEYWORDS, help=f"Maximum number of generated search keywords (default: {config.DEFAULT_MAX_KEYWORDS})")
 parser.add_argument("--new-pipeline", action="store_true", help="Use new modular pipeline (experimental)")
 parser.add_argument("query", type=str, help="The search query for second-hand listings")
 args = parser.parse_args()

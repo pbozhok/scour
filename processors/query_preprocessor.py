@@ -13,6 +13,7 @@ import json
 import re
 from typing import Optional
 
+from config import DEFAULT_MAX_KEYWORDS
 from llm.client import LLMClient
 
 
@@ -81,7 +82,7 @@ class QueryPreprocessor:
         
         return query
     
-    async def generate_keywords(self, query: str, max_keywords: int = 10) -> list[str]:
+    async def generate_keywords(self, query: str, max_keywords: int = DEFAULT_MAX_KEYWORDS) -> list[str]:
         """
         Generate search keywords from a user query using LLM.
         
@@ -121,7 +122,7 @@ Guidelines:
 - Include variations and synonyms (e.g., "phone" and "smartphone")
 - Include related terms that capture the user's intent
 - Keep keywords short (1-4 words each)
-- Use lowercase only
+- ONLY use lowercase
 - Do NOT include prices, colors, or very specific attributes
 - Focus on what the user wants to buy, not where or how
 
@@ -148,12 +149,13 @@ Now generate keywords for the user query:"""
                 keywords = parsed["keywords"]
                 # Clean and filter keywords
                 keywords = [self._clean_keyword(k) for k in keywords if self._clean_keyword(k)]
-                # Deduplicate while preserving order
+                # Deduplicate while preserving order (case-insensitive)
                 seen = set()
                 unique_keywords = []
                 for kw in keywords:
-                    if kw not in seen:
-                        seen.add(kw)
+                    kw_lower = kw.lower()
+                    if kw_lower not in seen:
+                        seen.add(kw_lower)
                         unique_keywords.append(kw)
                 # Limit to max_keywords
                 return unique_keywords[:max_keywords]
@@ -163,8 +165,9 @@ Now generate keywords for the user query:"""
                 seen = set()
                 unique_keywords = []
                 for kw in keywords:
-                    if kw not in seen:
-                        seen.add(kw)
+                    kw_lower = kw.lower()
+                    if kw_lower not in seen:
+                        seen.add(kw_lower)
                         unique_keywords.append(kw)
                 return unique_keywords[:max_keywords]
             else:
@@ -242,12 +245,13 @@ Now generate keywords for the user query:"""
                     if keyword and len(keyword) <= 50:
                         keywords.append(keyword)
         
-        # Deduplicate and limit
+        # Deduplicate and limit (case-insensitive)
         seen = set()
         unique_keywords = []
         for kw in keywords:
-            if kw not in seen:
-                seen.add(kw)
+            kw_lower = kw.lower()
+            if kw_lower not in seen:
+                seen.add(kw_lower)
                 unique_keywords.append(kw)
         
         return unique_keywords[:max_keywords]
@@ -289,7 +293,7 @@ Now generate keywords for the user query:"""
     async def generate_search_queries(
         self, 
         query: str, 
-        max_keywords: int = 3,
+        max_keywords: int = DEFAULT_MAX_KEYWORDS,
         use_original: bool = True
     ) -> list[str]:
         """
@@ -314,7 +318,11 @@ Now generate keywords for the user query:"""
         # Include the cleaned original query
         cleaned_original = self.clean_query(query)
         
-        if use_original and cleaned_original not in keywords:
+        # Check if cleaned_original is already in keywords (case-insensitive)
+        cleaned_original_lower = cleaned_original.lower()
+        has_original = any(kw.lower() == cleaned_original_lower for kw in keywords)
+        
+        if use_original and not has_original:
             # Prepend the original query
             result = [cleaned_original] + keywords
         else:
@@ -326,7 +334,7 @@ Now generate keywords for the user query:"""
 async def preprocess_query(
     query: str,
     llm_backend: str = "gemini",
-    max_keywords: int = 3,
+    max_keywords: int = DEFAULT_MAX_KEYWORDS,
     use_original: bool = True,
     debug: bool = False
 ) -> tuple[str, list[str]]:

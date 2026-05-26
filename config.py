@@ -57,6 +57,10 @@ BATCH_SIZE = 60  # For LLM filtering
 DELAY_BETWEEN_BATCHES = 2.0 # seconds
 DEFAULT_MAX_RESULTS = 40  # Default max results per scraper
 
+# ── Query Processing Configuration ────────────────────────────────────────────
+
+DEFAULT_MAX_KEYWORDS = int(os.getenv("DEFAULT_MAX_KEYWORDS", "3"))  # Default number of search keywords
+
 # ── Review Configuration ──────────────────────────────────────────────────────
 
 MAX_REVIEW_RESULTS = 3

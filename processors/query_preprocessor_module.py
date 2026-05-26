@@ -9,6 +9,7 @@ from rich.console import Console
 
 from core.module import Module, ModuleType, PipelineContext
 from core.logging import get_logger
+from config import DEFAULT_MAX_KEYWORDS
 from processors.query_preprocessor import QueryPreprocessor
 
 console = Console()
@@ -91,7 +92,7 @@ class QueryPreprocessorModule(Module):
             cleaned_query = self._preprocessor.clean_query(context.query)
             
             # Generate search queries
-            max_keywords = context.config.get("max_keywords", 8)
+            max_keywords = context.config.get("max_keywords", DEFAULT_MAX_KEYWORDS)
             # Generate max_keywords - 1 additional keywords, then prepend cleaned query
             # This ensures total search queries = max_keywords
             additional_keywords = max_keywords - 1
@@ -100,14 +101,15 @@ class QueryPreprocessorModule(Module):
             # Build search queries: cleaned query + generated keywords
             search_queries = [cleaned_query] + keywords
             
-            # Deduplicate while preserving order
+            # Deduplicate while preserving order (case-insensitive)
             seen = set()
             unique_queries = []
             for q in search_queries:
-                if q not in seen:
-                    seen.add(q)
+                q_lower = q.lower()
+                if q_lower not in seen:
+                    seen.add(q_lower)
                     unique_queries.append(q)
-            search_queries = unique_queries
+            search_queries = unique_queries[:max_keywords]
             
             # Store in metadata
             context.set_metadata("cleaned_query", cleaned_query)
@@ -145,7 +147,7 @@ class QueryPreprocessorModule(Module):
             return self._preprocessor.clean_query(query)
         return query
     
-    async def generate_search_queries(self, query: str, max_keywords: int = 8) -> List[str]:
+    async def generate_search_queries(self, query: str, max_keywords: int = DEFAULT_MAX_KEYWORDS) -> List[str]:
         """
         Generate search queries from a user query.
         
