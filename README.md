@@ -1,4 +1,4 @@
-# Second-Hand Product Research Agent
+m# Second-Hand Product Research Agent
 
 A powerful research assistant that scrapes, filters, and ranks second-hand product listings from multiple platforms using AI.
 
@@ -23,7 +23,7 @@ A powerful research assistant that scrapes, filters, and ranks second-hand produ
 ## Requirements
 
 - Python 3.10+
-- Required packages: `httpx`, `beautifulsoup4`, `rich`, `python-dotenv`, `requests`
+- Required packages: `httpx`, `beautifulsoup4`, `rich`, `python-dotenv`, `requests`, `mistralai`, `vinted-scraper`
 
 ## Installation
 
@@ -37,7 +37,7 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install httpx beautifulsoup4 rich python-dotenv requests
+pip install httpx beautifulsoup4 rich python-dotenv requests mistralai vinted-scraper
 ```
 
 ## API Keys
