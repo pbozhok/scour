@@ -47,6 +47,8 @@ def display_results(listings: list[Listing], user_query: str, skip_reviews: bool
             table.add_row("Reason",  listing.score_reason)
         if not skip_reviews and listing.product_model:
             table.add_row("Model",   listing.product_model)
+        if listing.date_posted:
+            table.add_row("Date",    listing.date_posted)
         table.add_row("Link",    listing.url)
         console.print(table)
 
