@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from web.backend.models.schemas import ErrorResponse
 
 # Import API routers
-from web.backend.api import search
+from web.backend.api import search, search_sse
 
 
 # Configuration - use absolute paths
@@ -88,6 +88,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include API routers
 app.include_router(search.router, prefix="/api/v1", tags=["search"])
+app.include_router(search_sse.router, prefix="/api/v1", tags=["search", "sse"])
 
 
 # Root endpoint - serve the main HTML page

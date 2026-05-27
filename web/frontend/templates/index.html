@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Second-Hand Search</title>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/search-animation.css">
 </head>
 <body>
     <!-- Search Container - starts in center, moves to top on search -->
@@ -71,11 +72,8 @@
         </div>
     </div>
 
-    <!-- Loading Indicator -->
-    <div id="loading-indicator" class="loading-indicator" style="display: none;">
-        <div class="spinner"></div>
-        <p>Searching...</p>
-    </div>
+    <!-- Search Animation Container -->
+    <div id="search-animation" class="search-animation-container" style="display: none;"></div>
 
     <!-- Error Message -->
     <div id="error-message" class="error-message" style="display: none;"></div>
@@ -83,6 +81,10 @@
     <!-- Results Container -->
     <div id="results-container" class="results-container"></div>
 
+    <!-- Search Animation Script -->
+    <script src="/static/js/search-animation.js"></script>
+    <!-- Search Animation Integration -->
+    <script src="/static/js/search-animation-integration.js"></script>
     <!-- Main App Script -->
     <script src="/static/js/app.js"></script>
 </body>
