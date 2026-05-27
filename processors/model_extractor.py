@@ -131,7 +131,7 @@ Listings:
         if not listings:
             return listings
         
-        batch_size = context.get("batch_size", 10)
+        batch_size = max(10, context.get("batch_size", context.get("BATCH_SIZE", 30)))
         
         # Create batches
         batches = [
