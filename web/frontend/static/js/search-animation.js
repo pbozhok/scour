@@ -214,9 +214,11 @@ class SearchAnimation {
     // Emit phase change event
     this.emit('phaseChange', this.getPhaseEventData());
 
-    // Start client-side phase progression
-    // SSE is experimental - using client-side estimation for now
-    this.startClientSideProgression();
+    // Only start client-side phase progression if SSE is NOT connected
+    // If SSE will connect later, it will call stopClientSideProgression()
+    if (!this.sseConnected) {
+      this.startClientSideProgression();
+    }
   }
 
   /**
@@ -224,7 +226,7 @@ class SearchAnimation {
    * Phases will advance automatically based on estimated durations
    */
   startClientSideProgression() {
-    if (!this.options.phases || !this.isAnimating) return;
+    if (!this.options.phases || !this.isAnimating || this.sseConnected) return;
 
     // Clear any existing timer
     if (this.phaseTimer) {
@@ -239,8 +241,8 @@ class SearchAnimation {
 
     // Advance to next phase after duration
     this.phaseTimer = setTimeout(() => {
-      // Only advance if still animating and not at the last phase
-      if (this.currentPhaseIndex < this.options.phases.length - 1) {
+      // Only advance if still animating, not at the last phase, and SSE not connected
+      if (this.isAnimating && !this.sseConnected && this.currentPhaseIndex < this.options.phases.length - 1) {
         this.currentPhaseIndex++;
         this.updatePhase();
         this.emit('phaseChange', this.getPhaseEventData());
@@ -279,7 +281,6 @@ class SearchAnimation {
       this.eventSource.onopen = () => {
         this.sseConnected = true;
         this.stopClientSideProgression();
-        console.log('SSE connection opened');
       };
 
       this.eventSource.onmessage = (event) => {
@@ -290,17 +291,17 @@ class SearchAnimation {
           if (data.error) this.error(data.error);
           if (data.complete) this.complete();
         } catch (error) {
-          console.error('Error parsing SSE message:', error);
+          // Don't log parsing errors to avoid console spam
         }
       };
 
       this.eventSource.onerror = (error) => {
         this.sseConnected = false;
-        console.warn('SSE connection failed, using client-side estimation:', error);
+        // Don't log - connection errors are expected (e.g., when search completes)
       };
 
     } catch (error) {
-      console.warn('SSE not supported, using client-side estimation:', error);
+      // Don't log - SSE not supported is handled by client-side estimation
       this.sseConnected = false;
     }
   }
@@ -310,12 +311,20 @@ class SearchAnimation {
    * @param {string} phaseId - The phase ID to transition to
    */
   nextPhase(phaseId) {
+    // Validate that phaseId is a string from our known phases
+    if (typeof phaseId !== 'string') {
+      console.error('SearchAnimation: Invalid phaseId type, must be string');
+      return;
+    }
+    
     const phaseIndex = this.options.phases.findIndex(p => p.id === phaseId);
     
     if (phaseIndex >= 0) {
       this.currentPhaseIndex = phaseIndex;
       this.updatePhase();
       this.emit('phaseChange', this.getPhaseEventData());
+    } else {
+      console.error(`SearchAnimation: Unknown phase "${phaseId}"`);
     }
   }
 
@@ -328,6 +337,12 @@ class SearchAnimation {
     // Update screen reader text
     if (this.srText && phase) {
       this.srText.textContent = `Search phase: ${phase.label}`;
+    }
+
+    // Ensure phase exists and has a label
+    if (!phase || !phase.label) {
+      console.error('SearchAnimation: Invalid phase, cannot update display');
+      return;
     }
 
     // Check for fun message opportunity (10% chance during fetch phase)

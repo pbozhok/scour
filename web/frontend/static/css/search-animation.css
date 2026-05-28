@@ -120,7 +120,7 @@
 
 /* Checkmark icon for complete state */
 .sa-complete .sa-spinner::after {
-  content: '\\2713';
+  content: '\2713';
   position: absolute;
   font-size: 2rem;
   color: #10b981;

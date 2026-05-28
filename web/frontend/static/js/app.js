@@ -682,8 +682,8 @@ document.addEventListener('DOMContentLoaded', function() {
     initFormSubmit();
     initKeyboardNavigation();
     
-    console.log('\u2713 Second-Hand Search initialized');
+    console.log('✓ Second-Hand Search initialized');
 });
 
 // Also log when script loads (before DOMContentLoaded)
-console.log('\u2713 app.js loaded');
+console.log('✓ app.js loaded');

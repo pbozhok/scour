@@ -28,7 +28,7 @@ from core.pipeline import Pipeline, PipelineConfig
 from core.registry import registry
 
 # Import SearchProgressTracker for phase updates
-from web.backend.api.search_sse import SearchProgressTracker, active_searches
+from web.backend.api.search_sse import SearchProgressTracker, active_searches, get_search_tracker
 
 # Import module packages to trigger auto-registration with registry
 import scrapers
@@ -64,6 +64,7 @@ async def search_items(
     use_reviews: Optional[bool] = Query(default=True, description="Enable reviews"),
     use_scoring: Optional[bool] = Query(default=True, description="Enable scoring"),
     sort_by: Optional[str] = Query(default="score", description="Sort by: score, price_asc, price_desc, date"),
+    search_id: Optional[str] = Query(default=None, description="Optional search ID for SSE tracking"),
     pipeline: Pipeline = Depends(get_pipeline),
 ) -> SearchResponse:
     """
@@ -78,10 +79,13 @@ async def search_items(
     **Note**: This endpoint runs the same search logic as the CLI,
     just formatted for web display.
     """
-    # Generate unique search ID for phase tracking
-    search_id = str(uuid.uuid4())
-    tracker = SearchProgressTracker(search_id)
-    active_searches[search_id] = tracker
+    # Use provided search_id or generate a new one
+    # Use get_search_tracker to ensure we reuse existing tracker (if SSE connected early)
+    if search_id:
+        tracker = await get_search_tracker(search_id)
+    else:
+        search_id = str(uuid.uuid4())
+        tracker = await get_search_tracker(search_id)
     
     # Build the search request model
     search_request = SearchRequest(
@@ -114,10 +118,28 @@ async def search_items(
         # Load modules into pipeline
         pipeline.load_modules()
         
-        # Execute the pipeline
+        # Create phase callback to update tracker
+        def phase_callback(phase_name: str, current: int, total: int):
+            """Callback from pipeline to update phase tracker."""
+            # Map pipeline phase names to our tracker phases
+            phase_map = {
+                'fetching': 'fetching',
+                'filtering': 'filtering',
+                'ranking': 'ranking',
+                'loading': 'loading',
+            }
+            if phase_name in phase_map:
+                # Find the phase index
+                for idx, phase in enumerate(SearchProgressTracker.PHASES):
+                    if phase['id'] == phase_map[phase_name]:
+                        tracker.current_phase_index = idx
+                        tracker.progress = int((idx / len(SearchProgressTracker.PHASES)) * 100)
+                        break
+        
+        # Execute the pipeline with phase callback
         try:
             logger.info(f"Starting pipeline execution for search: {search_id}")
-            context = await pipeline.execute(pipeline_config)
+            context = await pipeline.execute(pipeline_config, phase_callback=phase_callback)
             logger.info(f"Pipeline completed successfully for search: {search_id}")
         except Exception as e:
             logger.exception(f"Pipeline execution failed for search {search_id}: {e}")
