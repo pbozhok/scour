@@ -45,7 +45,7 @@ class SearchProgressTracker:
         self.is_complete = False
         self.is_error = False
         self.error_message = ""
-        self.progress = 0
+        self.progress = int(1 / len(self.PHASES) * 100)
     
     @property
     def current_phase(self):
@@ -149,7 +149,7 @@ async def stream_search_phases(
             logger.info(f"SSE client disconnected for search: {search_id}")
         except Exception as e:
             logger.error(f"Error in SSE stream for {search_id}: {e}")
-            yield {"data": json.dumps({"error": str(e)})}
+            yield {"data": json.dumps({"error": True, "error_message": str(e)})}
     
     return EventSourceResponse(event_generator())
 

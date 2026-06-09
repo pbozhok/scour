@@ -103,9 +103,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (animationContainer) {
                 animationContainer.style.display = 'flex';
             }
-            
+
             if (searchAnimation) {
-                searchAnimation.reset();
                 searchAnimation.start();
             }
             

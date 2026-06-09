@@ -512,6 +512,142 @@ class TestClientSideProgression:
 
 
 # ---------------------------------------------------------------------------
+# SSE pre-connect pattern
+# ---------------------------------------------------------------------------
+
+class TestSSEPreconnect:
+    """
+    The integration (search-animation-integration.js) pre-connects SSE before
+    the search starts, so no phase events are missed.
+
+    Bug: showLoading() in the integration calls reset() before start().
+    reset() calls closeSSE(), so sseConnected becomes False → start() sees no
+    live SSE → launches client-side timers → the bar races through
+    estimated phase durations (~8 s) while the real search takes much longer.
+
+    Fix: showLoading() must call start() directly, without reset().
+    start() already resets all animation state (phase index, isError, classes,
+    aria-busy) without touching the SSE connection.
+    """
+
+    INTEG_SRC = (
+        pathlib.Path(__file__).parents[2]
+        / "frontend" / "static" / "js" / "search-animation-integration.js"
+    ).read_text(encoding="utf-8")
+
+    def _integ_page(self, page: Page) -> Page:
+        """
+        Minimal page that loads both SearchAnimation and integration.js.
+        Provides the DOM elements and stub globals that integration.js needs.
+        """
+        page.set_content("""
+            <html><body>
+              <div id="search-animation"></div>
+              <input id="search-query" value="test">
+              <div id="loading-indicator" style="display:none"></div>
+              <div id="error-message" style="display:none"></div>
+              <script>
+                window.submitSearch = function() {
+                    window.showLoading && window.showLoading();
+                };
+                window.showError = function(msg) {};
+                window.hideLoading = function() {};
+              </script>
+              <script>ANIM_PLACEHOLDER</script>
+              <script>INTEG_PLACEHOLDER</script>
+            </body></html>
+        """.replace("ANIM_PLACEHOLDER", JS_SRC).replace("INTEG_PLACEHOLDER", self.INTEG_SRC))
+        return page
+
+    def test_show_loading_does_not_close_sse(self, page: Page):
+        """
+        After connectToSSE() pre-connects, showLoading() must NOT close the
+        SSE connection. Currently FAILS because showLoading() calls reset()
+        which calls closeSSE().
+        """
+        p = self._integ_page(page)
+
+        result = p.evaluate("""
+            () => new Promise(resolve => {
+                let sseClosed = false;
+                window.EventSource = class {
+                    constructor(url) {
+                        Promise.resolve().then(() => this.onopen && this.onopen());
+                    }
+                    close() { sseClosed = true; }
+                    onopen = null; onmessage = null; onerror = null;
+                };
+
+                // Trigger the full integration flow:
+                //   submitSearch → connectToSSE → showLoading
+                window.submitSearch();
+
+                setTimeout(() => resolve({ sseClosed }), 20);
+            })
+        """)
+
+        # FAILS before fix: reset() in showLoading() calls EventSource.close()
+        # PASSES after fix: showLoading() calls only start(), which skips closeSSE()
+        assert result["sseClosed"] is False, (
+            "showLoading() closed the SSE connection via reset(). "
+            "Remove the reset() call from showLoading() in "
+            "search-animation-integration.js."
+        )
+
+    def test_reset_closes_sse_but_start_does_not(self, anim_page):
+        """
+        Documents the correct contract: reset() closes SSE (by design), but
+        start() alone must not. This is why showLoading() must use start()
+        without reset().
+        """
+        result = anim_page.evaluate("""
+            () => new Promise(resolve => {
+                window.EventSource = class {
+                    constructor(url) {
+                        Promise.resolve().then(() => this.onopen && this.onopen());
+                    }
+                    close() {}
+                    onopen = null; onmessage = null; onerror = null;
+                };
+                const anim = new SearchAnimation('#container');
+                anim.options.sseEndpoint = '/phases?search_id=x';
+                anim.connectSSE();
+
+                setTimeout(() => {
+                    const connectedAfterConnect = anim.sseConnected;
+
+                    // reset() is supposed to kill SSE — that's correct for reset
+                    const animB = new SearchAnimation('#container');
+                    animB.options.sseEndpoint = '/phases?search_id=y';
+                    animB.connectSSE();
+
+                    setTimeout(() => {
+                        animB.reset();
+                        const connectedAfterReset = animB.sseConnected;
+
+                        // start() alone must leave SSE intact
+                        anim.start();
+                        const connectedAfterStart = anim.sseConnected;
+                        const timerAfterStart = anim.phaseTimer !== null;
+
+                        resolve({
+                            connectedAfterConnect,
+                            connectedAfterReset,
+                            connectedAfterStart,
+                            timerAfterStart,
+                        });
+                    }, 10);
+                }, 10);
+            })
+        """)
+
+        assert result["connectedAfterConnect"] is True   # SSE is live after connectSSE
+        assert result["connectedAfterReset"] is False    # reset() correctly kills SSE
+        assert result["connectedAfterStart"] is True     # start() alone preserves SSE
+        assert result["timerAfterStart"] is False        # no client-side fallback timer
+
+
+# ---------------------------------------------------------------------------
 # Event system
 # ---------------------------------------------------------------------------
 
