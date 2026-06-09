@@ -9,13 +9,9 @@ progress information to users.
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
-
-from core.pipeline import Pipeline, PipelineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +100,7 @@ async def get_search_tracker(search_id: str) -> SearchProgressTracker:
 async def stream_search_phases(
     request: Request,
     search_id: str = "default"
-) -> StreamingResponse:
+) -> EventSourceResponse:
     """
     SSE endpoint that streams search phase updates.
     
@@ -169,64 +165,6 @@ async def poll_search_phase(
     """
     tracker = await get_search_tracker(search_id)
     return tracker.get_state()
-
-
-async def run_search_with_phase_updates(
-    pipeline: Pipeline,
-    config: PipelineConfig,
-    search_id: str = "default"
-) -> dict:
-    """
-    Execute a search while emitting phase transition events.
-    
-    This function wraps the pipeline execution and updates the phase tracker
-    at each stage of the search process.
-    
-    Args:
-        pipeline: The Pipeline instance
-        config: PipelineConfig for the search
-        search_id: Unique identifier for this search
-    
-    Returns:
-        The final search results
-    """
-    tracker = await get_search_tracker(search_id)
-    
-    try:
-        # Phase 1: Initiating
-        tracker.current_phase_index = 0
-        await asyncio.sleep(0.1)  # Small delay to allow SSE to pick up
-        
-        # Load modules
-        pipeline.load_modules()
-        
-        # Phase 2: Fetching (this happens during pipeline.execute)
-        tracker.next_phase()
-        await asyncio.sleep(0.1)
-        
-        # Execute pipeline with phase updates
-        context = await pipeline.execute_with_hooks(
-            config,
-            phase_callback=lambda phase: tracker.next_phase()
-        )
-        
-        # Phase 5: Loading (formatting results)
-        tracker.next_phase()
-        await asyncio.sleep(0.1)
-        
-        # Phase 6: Complete
-        tracker.complete()
-        
-        return {
-            "results": context.listings,
-            "metadata": context.metadata,
-            "search_id": search_id
-        }
-        
-    except Exception as e:
-        tracker.set_error(str(e))
-        logger.exception(f"Search failed for {search_id}: {e}")
-        raise
 
 
 # Cleanup function to remove completed searches

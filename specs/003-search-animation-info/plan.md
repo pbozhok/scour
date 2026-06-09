@@ -58,22 +58,26 @@ specs/003-search-animation-info/
 web/
 ├── backend/
 │   ├── api/
-│   │   └── search.py       # May need endpoint for search status (if implementing server-sent events)
+│   │   ├── search.py           # Modified: add search_id param + phase_callback hook
+│   │   └── search_sse.py       # New: SSE router + SearchProgressTracker + active_searches store
 │   └── models/
-│       └── schemas.py      # Status message schemas if needed
+│       └── schemas.py          # Status message schemas if needed
 └── frontend/
     ├── static/
     │   ├── css/
-    │   │   └── search-animation.css  # New: Animation styles
+    │   │   └── search-animation.css              # New: Animation styles
     │   ├── js/
-    │   │   └── search-animation.js   # New: Animation logic
+    │   │   ├── search-animation.js               # New: SearchAnimation class (standalone)
+    │   │   └── search-animation-integration.js   # New: Wires animation into existing app.js
     │   └── images/
-    │       └── loading/              # New: Optional custom loading icons/animations
+    │       └── loading/                          # New: SVG icons per phase
     └── templates/
-        └── index.html       # Modified: Integrate animation component
+        └── index.html       # Modified: Integrate animation container + load new scripts
 ```
 
-**Structure Decision**: Web service with separate frontend static assets. Animation logic lives in frontend JavaScript/CSS, maintaining separation of concerns. Backend may provide status updates via API if real-time progress tracking is implemented.
+**Structure Decision**: Web service with separate frontend static assets. Animation logic lives in frontend JavaScript/CSS, maintaining separation of concerns. The integration layer (`search-animation-integration.js`) patches `showLoading`, `hideLoading`, `showError`, and `submitSearch` at runtime so the animation component stays decoupled from app.js.
+
+**SSE integration pattern**: The frontend generates a `search_id` and opens the SSE connection *before* submitting the search request so no early phase events are missed. The backend's `SearchProgressTracker` (keyed by `search_id` in an in-memory dict) is updated by `search.py` via a `phase_callback` during pipeline execution.
 
 ## Complexity Tracking
 

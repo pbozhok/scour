@@ -118,23 +118,15 @@ async def search_items(
         # Load modules into pipeline
         pipeline.load_modules()
         
-        # Create phase callback to update tracker
+        # Build a lookup so each phase_callback call is O(1)
+        _phase_index = {p['id']: i for i, p in enumerate(SearchProgressTracker.PHASES)}
+        _n_phases = len(SearchProgressTracker.PHASES)
+
         def phase_callback(phase_name: str, current: int, total: int):
-            """Callback from pipeline to update phase tracker."""
-            # Map pipeline phase names to our tracker phases
-            phase_map = {
-                'fetching': 'fetching',
-                'filtering': 'filtering',
-                'ranking': 'ranking',
-                'loading': 'loading',
-            }
-            if phase_name in phase_map:
-                # Find the phase index
-                for idx, phase in enumerate(SearchProgressTracker.PHASES):
-                    if phase['id'] == phase_map[phase_name]:
-                        tracker.current_phase_index = idx
-                        tracker.progress = int((idx / len(SearchProgressTracker.PHASES)) * 100)
-                        break
+            idx = _phase_index.get(phase_name)
+            if idx is not None:
+                tracker.current_phase_index = idx
+                tracker.progress = int((idx + 1) / _n_phases * 100)
         
         # Execute the pipeline with phase callback
         try:
@@ -173,8 +165,8 @@ async def search_items(
         return response
         
     except ValueError as e:
-        # Validation or configuration error
         logger.error(f"Validation error for query '{query}': {e}")
+        tracker.set_error(str(e))
         raise HTTPException(
             status_code=400,
             detail=ErrorResponse(
@@ -184,8 +176,8 @@ async def search_items(
             ).dict()
         )
     except TimeoutError as e:
-        # Search timeout
         logger.error(f"Timeout error for query '{query}': {e}")
+        tracker.set_error("Search is taking longer than usual. Please try again.")
         raise HTTPException(
             status_code=504,
             detail=ErrorResponse(
@@ -195,7 +187,6 @@ async def search_items(
             ).dict()
         )
     except Exception as e:
-        # Unexpected error
         logger.exception(f"Unexpected error for query '{query}': {e}")
         tracker.set_error(str(e))
         raise HTTPException(
@@ -206,9 +197,6 @@ async def search_items(
                 details={"type": type(e).__name__, "message": str(e)}
             ).dict()
         )
-    finally:
-        # Mark tracker as complete
-        tracker.complete()
 
 
 @router.get("/search/quick", response_model=SearchResponse)

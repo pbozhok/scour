@@ -29,8 +29,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 showIcon: false,
                 sseEndpoint: '/api/v1/search/phases'
             });
-            
-
         } else {
             console.warn('SearchAnimation container not found');
             return;
@@ -39,6 +37,10 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Failed to initialize SearchAnimation:', error);
         return;
     }
+
+    // Save the original complete method ONCE so connectToSSE can re-wrap it
+    // without stacking closures on every search.
+    const originalAnimationComplete = searchAnimation.complete.bind(searchAnimation);
 
     // Function to close existing SSE connection
     function closeSSEConnection() {
@@ -63,18 +65,17 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // Use the SearchAnimation's built-in SSE connection
             searchAnimation.connectSSE();
-            
-            // Add custom handler for complete state to auto-hide animation
-            const originalComplete = searchAnimation.complete.bind(searchAnimation);
+
+            // Re-wrap complete each time using the saved original, not the
+            // previously-wrapped version, so closures don't stack across searches.
             searchAnimation.complete = function() {
-                originalComplete();
-                // Auto-hide animation after showing completion
+                originalAnimationComplete();
                 setTimeout(() => {
                     const container = document.getElementById('search-animation');
                     if (container) container.style.display = 'none';
                 }, 1000);
             };
-            
+
             return searchAnimation.eventSource;
             
         } catch (error) {
@@ -164,73 +165,39 @@ document.addEventListener('DOMContentLoaded', function() {
             if (originalShowError) originalShowError(message);
         };
 
-        // Patch submitSearch to generate search_id and connect to SSE before making request
+        // Wrap submitSearch to inject search_id and SSE pre-connection.
+        // All search params (toggles, sort, etc.) still come from buildQueryParams()
+        // in app.js — we only append search_id on top.
         if (window.submitSearch) {
             const originalSubmitSearch = window.submitSearch;
-            
+
             window.submitSearch = function() {
                 const query = document.getElementById('search-query')?.value || '';
-                
-                // Validate query
+
                 if (!query || query.trim().length < 1) {
                     if (window.showError) window.showError('Please enter a search query');
                     return;
                 }
-                
-                // Update state
-                STATE.currentQuery = query;
-                STATE.isSearching = true;
-                
-                // Move search bar to top
-                const searchContainer = document.getElementById('search-container');
-                if (searchContainer) {
-                    searchContainer.classList.add('active');
-                    document.documentElement.style.paddingTop = '220px';
-                }
-                
-                // Generate search_id for this search
-                const generatedSearchId = 'search-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-                
-                // Connect to SSE FIRST, before showing loading animation
-                // This ensures we don't miss early phase updates
-                connectToSSE(generatedSearchId);
-                
-                // Show loading with animation (this starts client-side estimation)
-                if (window.showLoading) window.showLoading();
-                
-                // Now build URL with the generated search_id
-                const params = new URLSearchParams();
-                params.set('query', query);
-                params.set('max_results', 40);
-                params.set('currency', 'EUR');
-                params.set('use_filter', true);
-                params.set('use_reviews', true);
-                params.set('use_scoring', true);
-                params.set('sort_by', 'score');
-                params.set('search_id', generatedSearchId);
-                
-                const url = `/api/v1/search?${params.toString()}`;
-                
-                // Make fetch request with our search_id
-                const originalFetch = window.fetch;
-                window.fetch(url, {
-                    method: 'GET',
-                    headers: {'Accept': 'application/json'}
-                })
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    return response.json();
-                })
-                .then(data => {
-                    if (window.renderCards) window.renderCards(data);
-                })
-                .catch(error => {
-                    console.error('Search error:', error);
-                    if (window.showError) window.showError(`Search failed: ${error.message}`);
-                })
-                .finally(() => {
-                    STATE.isSearching = false;
-                });
+
+                // Generate search_id and open SSE BEFORE showLoading so we
+                // don't miss the early "initiating" phase event.
+                const searchId = 'search-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                connectToSSE(searchId);
+
+                // Let the original handle state updates, search bar move,
+                // showLoading, buildQueryParams, fetch, renderCards, and hideLoading —
+                // but intercept fetch to append search_id to the URL.
+                const nativeFetch = window.fetch;
+                window.fetch = function(url, init) {
+                    if (typeof url === 'string' && url.includes('/api/v1/search')) {
+                        const sep = url.includes('?') ? '&' : '?';
+                        url = `${url}${sep}search_id=${encodeURIComponent(searchId)}`;
+                    }
+                    window.fetch = nativeFetch;  // restore immediately after one use
+                    return nativeFetch.call(this, url, init);
+                };
+
+                originalSubmitSearch();
             };
         } else {
             console.warn('submitSearch function not found');

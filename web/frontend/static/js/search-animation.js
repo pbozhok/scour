@@ -25,28 +25,20 @@ class SearchAnimation {
     { id: 'complete', label: 'Done!', icon: 'check', color: '#10b981', order: 6, estimatedDurationMs: 0 }
   ];
 
-  /**
-   * Fun messages for long searches (easter eggs)
-   * Randomly displayed during the fetch phase
-   */
   static FUN_MESSAGES = [
     'Hunting for deals...',
     'Scouring the web for you...',
     'Finding hidden gems...',
     'On the prowl for bargains...',
-    'Searching far and wide...'
+    'Searching far and wide...',
+    'Did you know? Second-hand items reduce waste by 80% on average.',
+    'Fun fact: The average person saves $1,500 per year by buying second-hand.',
+    'Interesting: Second-hand shopping reduces carbon footprint by 30%.',
+    'Fact: 70% of second-hand items are in excellent condition.',
+    'Tip: Buying second-hand helps support local communities.'
   ];
 
-  /**
-   * SSE Event Source connection
-   */
   eventSource = null;
-
-  /**
-   * Connection retry configuration
-   */
-  static RETRY_DELAY_MS = 3000;
-  static MAX_RETRIES = 5;
 
   constructor(container, options = {}) {
     // Handle container selector or element
@@ -74,7 +66,6 @@ class SearchAnimation {
     this.isAnimating = false;
     this.isError = false;
     this.sseConnected = false;
-    this.retryCount = 0;
     this.startTime = null;
     this.eventListeners = {};
     this.phaseTimer = null;
@@ -145,10 +136,9 @@ class SearchAnimation {
     this.container.setAttribute('aria-busy', 'false');
     this.container.setAttribute('aria-label', 'Search animation');
 
-    // Add hidden text for screen readers
+    // Hidden text for screen readers (must NOT have aria-hidden)
     this.srText = document.createElement('span');
     this.srText.className = 'sr-only';
-    this.srText.setAttribute('aria-hidden', 'true');
     this.container.appendChild(this.srText);
   }
 
@@ -196,7 +186,6 @@ class SearchAnimation {
     this.isAnimating = true;
     this.isError = false;
     this.startTime = Date.now();
-    this.retryCount = 0;
 
     // Update UI
     this.container.classList.add('sa-animating');
@@ -288,10 +277,13 @@ class SearchAnimation {
           const data = JSON.parse(event.data);
           if (data.phase) this.nextPhase(data.phase);
           if (data.progress !== undefined) this.setProgress(data.progress);
-          if (data.error) this.error(data.error);
-          if (data.complete) this.complete();
-        } catch (error) {
-          // Don't log parsing errors to avoid console spam
+          if (data.error) {
+            this.error(data.error_message || 'Search failed');
+          } else if (data.complete) {
+            this.complete();
+          }
+        } catch (e) {
+          // ignore parse errors
         }
       };
 
@@ -402,9 +394,8 @@ class SearchAnimation {
 
     // Update colors if defined
     if (phase.color) {
-      const elements = this.spinner.querySelectorAll('.sa-dot, .sa-bar, .sa-pulsing-ring');
-      elements.forEach((el, index) => {
-        const colors = phase.color.split(',').map(c => c.trim()) || [phase.color];
+      const colors = phase.color.split(',').map(c => c.trim());
+      this.spinner.querySelectorAll('.sa-dot, .sa-bar, .sa-pulsing-ring').forEach((el, index) => {
         el.style.backgroundColor = colors[index % colors.length];
         if (el.classList.contains('sa-pulsing-ring')) {
           el.style.borderTopColor = colors[0];
@@ -540,18 +531,6 @@ class SearchAnimation {
     };
   }
 }
-
-// Fun facts list (static, as per clarification)
-const FUN_FACTS = [
-  'Did you know? Second-hand items reduce waste by 80% on average.',
-  'Fun fact: The average person saves $1,500 per year by buying second-hand.',
-  'Interesting: Second-hand shopping reduces carbon footprint by 30%.',
-  'Fact: 70% of second-hand items are in excellent condition.',
-  'Tip: Buying second-hand helps support local communities.'
-];
-
-// Add fun facts to the static list
-SearchAnimation.FUN_MESSAGES = SearchAnimation.FUN_MESSAGES.concat(FUN_FACTS);
 
 // Export for module systems
 if (typeof module !== 'undefined' && module.exports) {

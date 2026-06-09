@@ -126,7 +126,18 @@ description: "Task list for Informative Search Animation feature implementation"
 - [X] T038 [P] Implement event callback system (phaseChange, complete, error, progress) in SearchAnimation class
 - [X] T039 [P] Add auto-reconnect logic for SSE connection in web/frontend/static/js/search-animation.js
 - [X] T040 [P] Create responsive CSS adjustments for mobile in web/frontend/static/css/search-animation.css
-- [X] T041 Validate with quickstart.md test scenarios
+- [X] T042 Create web/frontend/static/js/search-animation-integration.js — patches showLoading/hideLoading/showError/submitSearch at runtime; generates search_id, pre-connects SSE before submitting request
+- [ ] T041 Validate with quickstart.md test scenarios (manual end-to-end on running server)
+
+---
+
+## Phase 7: Bug Fixes & Cleanup (Remaining Work)
+
+**Purpose**: Correctness issues and loose ends found during implementation
+
+- [ ] T043 Fix `srText.setAttribute('aria-hidden', 'true')` in SearchAnimation.init() — `aria-hidden` on an sr-only element hides it from screen readers, defeating its purpose; remove the attribute so AT reads phase updates from `srText`, or remove `srText` entirely since `phaseText` already carries `aria-live="polite"` (web/frontend/static/js/search-animation.js)
+- [ ] T044 Remove or align dead function `run_search_with_phase_updates` in web/backend/api/search_sse.py — it calls `pipeline.execute_with_hooks()` which does not exist; the actual phase callback pattern is handled in web/backend/api/search.py via `pipeline.execute(..., phase_callback=...)`
+- [ ] T045 Wire up `cleanup_searches()` in web/backend/api/search_sse.py — the function is defined but never called; schedule it (e.g., FastAPI startup/shutdown event or a background task) to prevent `active_searches` from growing unbounded
 
 ---
 
@@ -139,7 +150,8 @@ description: "Task list for Informative Search Animation feature implementation"
 - **User Stories (Phase 3-5)**: All depend on Foundational phase completion
   - User stories can then proceed in parallel (if staffed)
   - Or sequentially in priority order (P1 → P2 → P3)
-- **Polish (Phase 6)**: Depends on all user stories being complete
+- **Polish (Phase 6)**: Depends on all user stories being complete; T042 depends on Phase 2-5 complete
+- **Bug Fixes (Phase 7)**: Independent of Phase 6 polish; T043-T045 can be worked in parallel
 
 ### User Story Dependencies
 
