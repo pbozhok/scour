@@ -68,29 +68,20 @@ class BaseReviewer(Module):
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """
         Execute the reviewer module.
-        
+
         Args:
             context: The pipeline context
-            
+
         Returns:
-            Modified context with review summaries added to listing metadata
+            Modified context with reviews processed
         """
         if not self._initialized:
             self.initialize(context.config)
-        
+
+        listings = context.get_listings()
         try:
-            listings = context.get_listings()
             reviews = await self.review(listings, context.config)
-            
-            # Add review summaries to listing metadata
-            for listing in listings:
-                if listing.id in reviews:
-                    if not hasattr(listing, 'metadata'):
-                        listing.metadata = {}
-                    listing.metadata['reviews'] = reviews[listing.id]
-            
             context.set_metadata(f"{self.name}_reviewed", len(reviews))
-            
         except Exception as e:
             context.add_error(
                 module_name=self.name,
@@ -98,5 +89,5 @@ class BaseReviewer(Module):
                 message=str(e),
                 context={"listing_count": len(listings), "query": context.query}
             )
-        
+
         return context

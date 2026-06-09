@@ -171,4 +171,4 @@ Review excerpts:
                     listing.review_summary = summary_data["summary"]
                     listing.review_links = summary_data["links"]
         
-        console.print(f"  Done for {len(listings)} listings ({len(unique_models)} unique model(s))\n")
+        console.print(f"  Done for {len(listings)} listings ({len(normalized_models)} unique model(s))\n")

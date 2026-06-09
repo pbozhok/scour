@@ -21,7 +21,7 @@ from web.backend.models.schemas import (
     SearchRequest,
     SearchResponse,
 )
-from web.shared.adapters import create_search_response, search_request_to_pipeline_config
+from web.shared.adapters import create_search_response
 
 # Import existing core modules
 from core.pipeline import Pipeline, PipelineConfig
@@ -97,9 +97,6 @@ async def search_items(
         use_scoring=use_scoring,
         sort_by=sort_by,
     )
-    
-    # Convert to pipeline config
-    pipeline_config_dict = search_request_to_pipeline_config(search_request)
     
     try:
         # Build PipelineConfig from the request

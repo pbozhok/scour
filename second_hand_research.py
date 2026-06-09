@@ -66,23 +66,51 @@ parser.add_argument("--no-preprocess", action="store_true", help="Skip query pre
 parser.add_argument("--max-keywords", type=int, default=config.DEFAULT_MAX_KEYWORDS, help=f"Maximum number of generated search keywords (default: {config.DEFAULT_MAX_KEYWORDS})")
 parser.add_argument("--new-pipeline", action="store_true", help="Use new modular pipeline (experimental)")
 parser.add_argument("query", type=str, help="The search query for second-hand listings")
-args = parser.parse_args()
-
 # Create logger with human-readable formatting (default)
 logger = get_logger(__name__, module_name="second_hand_research")
 
-# Initialize LLM client (will check availability)
-try:
-    llm_client = get_client(args.llm)
-except Exception as e:
-    console_startup = Console()
-    console_startup.print(f"[red]Error initializing {args.llm} client: {e}[/red]")
-    exit(1)
-
-# Console and debug output
+# Module-level globals — set by main() when run as script
+args = None
+llm_client = None
 console = Console()
-if args.debug:
-    console.print("[yellow]Debug mode enabled[/yellow]")
+
+
+def main():
+    global args, llm_client
+    args = parser.parse_args()
+
+    try:
+        llm_client = get_client(args.llm)
+    except Exception as e:
+        console.print(f"[red]Error initializing {args.llm} client: {e}[/red]")
+        exit(1)
+
+    if args.debug:
+        console.print("[yellow]Debug mode enabled[/yellow]")
+
+    query = args.query
+    skip_reviews = args.no_reviews
+
+    if args.new_pipeline:
+        logger.info("Using new modular pipeline")
+        pipeline_config = PipelineConfig(
+            query=query,
+            max_results=config.DEFAULT_MAX_RESULTS,
+            max_keywords=args.max_keywords,
+            target_currency=args.currency,
+            llm_backend=args.llm,
+            skip_preprocess=args.no_preprocess,
+            skip_filter=args.no_filter,
+            skip_score=args.no_score,
+            skip_reviews=skip_reviews,
+            debug=args.debug,
+        )
+        pipeline = Pipeline()
+        context = asyncio.run(pipeline.execute(pipeline_config))
+        from output import display_results_from_context
+        display_results_from_context(context, query, skip_reviews=skip_reviews)
+    else:
+        asyncio.run(research(query, skip_reviews=skip_reviews))
 
 # ── Wrapper for backwards compatibility ────────────────────────────────────────
 
@@ -635,7 +663,6 @@ async def fetch_description_dba(listing: Listing) -> None:
             # Try JSON-LD script tag first (DBA serves description here)
             script = soup.find("script", type="application/ld+json")
             if script:
-                import json
                 try:
                     data = json.loads(script.string)
                     text = data.get("description", "") or ""
@@ -738,7 +765,6 @@ async def fetch_description_vinted(listing: Listing) -> None:
             # Try JSON-LD script tag first (Vinted serves description here)
             script = soup.find("script", type="application/ld+json")
             if script:
-                import json
                 try:
                     data = json.loads(script.string)
                     text = data.get("description", "") or ""
@@ -1006,36 +1032,4 @@ async def research(user_query: str, max_per_platform: int = config.DEFAULT_MAX_R
 
 
 if __name__ == "__main__":
-    import sys
-
-    query = args.query
-    skip_reviews = args.no_reviews
-    
-    # Use new modular pipeline if requested
-    if args.new_pipeline:
-        logger.info("Using new modular pipeline")
-        
-        # Create pipeline config
-        pipeline_config = PipelineConfig(
-            query=query,
-            max_results=config.DEFAULT_MAX_RESULTS,
-            max_keywords=args.max_keywords,
-            target_currency=args.currency,
-            llm_backend=args.llm,
-            skip_preprocess=args.no_preprocess,
-            skip_filter=args.no_filter,
-            skip_score=args.no_score,
-            skip_reviews=skip_reviews,
-            debug=args.debug,
-        )
-        
-        # Create and run pipeline
-        pipeline = Pipeline()
-        context = asyncio.run(pipeline.execute(pipeline_config))
-        
-        # Display results from context
-        from output import display_results_from_context
-        display_results_from_context(context, query, skip_reviews=skip_reviews)
-    else:
-        # Use legacy pipeline
-        asyncio.run(research(query, skip_reviews=skip_reviews))
+    main()

@@ -30,7 +30,6 @@ def empty_context() -> PipelineContext:
 def sample_context() -> PipelineContext:
     """Create a PipelineContext with sample data."""
     sample_listing = Listing(
-        id="123",
         title="Sample Product",
         price=100.0,
         currency="EUR",
@@ -161,17 +160,15 @@ def mock_processor() -> Mock:
 def mock_sample_listing() -> Listing:
     """Create a sample Listing for testing."""
     return Listing(
-        id="test-123",
         title="Test Product",
         price=99.99,
         currency="EUR",
         url="https://example.com/test-123",
         platform="test-platform",
         description="This is a test product description.",
-        model="TestModel",
+        product_model="TestModel",
         score=85.0,
-        is_relevant=True,
-        metadata={"color": "black", "condition": "new"}
+        relevant=True,
     )
 
 
@@ -180,7 +177,6 @@ def mock_listings() -> List[Listing]:
     """Create a list of sample listings."""
     return [
         Listing(
-            id="1",
             title="Product 1",
             price=100.0,
             currency="EUR",
@@ -189,7 +185,6 @@ def mock_listings() -> List[Listing]:
             description="Description 1",
         ),
         Listing(
-            id="2",
             title="Product 2",
             price=200.0,
             currency="DKK",
@@ -198,7 +193,6 @@ def mock_listings() -> List[Listing]:
             description="Description 2",
         ),
         Listing(
-            id="3",
             title="Product 3",
             price=300.0,
             currency="SEK",

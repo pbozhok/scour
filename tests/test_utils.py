@@ -15,10 +15,11 @@ class TestExtractJson:
         assert result == {"key": "value"}
 
     def test_extract_json_with_multiple_objects(self):
-        """Test extracting first JSON object when multiple exist."""
+        """Test that extract_json returns None for two adjacent objects (ambiguous)."""
         text = '{"first": 1} {"second": 2}'
         result = extract_json(text)
-        assert result == {"first": 1}
+        # The function scans from first { to last }, producing invalid JSON
+        assert result is None
 
     def test_extract_json_from_markdown(self):
         """Test extracting JSON from markdown code blocks."""

@@ -6,7 +6,7 @@ a series of modules (scrapers, filters, processors, reviewers).
 """
 
 import asyncio
-from typing import List, Dict, Any, Optional, Callable, Type
+from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 
 from core.module import Module, ModuleType, PipelineContext, PipelineError
@@ -454,15 +454,3 @@ class Pipeline:
         
         return context
 
-
-def create_pipeline(config: Optional[PipelineConfig] = None) -> Pipeline:
-    """
-    Factory function to create a pipeline with optional configuration.
-    
-    Args:
-        config: Optional pipeline configuration
-        
-    Returns:
-        Configured Pipeline instance
-    """
-    return Pipeline()

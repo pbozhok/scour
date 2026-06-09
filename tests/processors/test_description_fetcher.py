@@ -43,7 +43,7 @@ class TestDescriptionFetcher:
             platform="DBA"
         )
         
-        await fetcher.fetch_description_dba(listing)
+        await fetcher._fetch_description_dba(listing)
         
         assert "Test description from JSON-LD" in listing.description
 
@@ -71,7 +71,7 @@ class TestDescriptionFetcher:
             platform="DBA"
         )
         
-        await fetcher.fetch_description_dba(listing)
+        await fetcher._fetch_description_dba(listing)
         
         assert "Test description from div" in listing.description
 
@@ -101,7 +101,7 @@ class TestDescriptionFetcher:
             platform="Vinted"
         )
         
-        await fetcher.fetch_description_vinted(listing)
+        await fetcher._fetch_description_vinted(listing)
         
         assert "Test Vinted description" in listing.description
 
@@ -129,28 +129,22 @@ class TestDescriptionFetcher:
             platform="Tradera"
         )
         
-        await fetcher.fetch_description_tradera(listing)
+        await fetcher._fetch_description_tradera(listing)
         
         assert "Test Tradera description" in listing.description
 
     async def test_fetch_descriptions_multiple(self):
-        """Test fetching descriptions for multiple listings."""
+        """Test that process() dispatches to per-platform fetchers for all listings."""
         fetcher = DescriptionFetcher(debug=False)
         listings = [
             Listing(title="Test1", price=100.0, currency="DKK", url="https://dba.dk/test1", description="", platform="DBA"),
             Listing(title="Test2", price=200.0, currency="DKK", url="https://dba.dk/test2", description="", platform="DBA"),
         ]
-        
-        # Mock the HTTP client
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_resp = MagicMock()
-            mock_resp.text = '<html><body><script type="application/ld+json">{"description": "desc"}</script></body></html>'
-            mock_resp.raise_for_status = AsyncMock()
-            
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_resp)
-            
-            await fetcher.fetch_descriptions(listings)
-        
-        # Both listings should have descriptions
-        for listing in listings:
-            assert listing.description != ""
+
+        async def fake_fetch(listing):
+            listing.description = "fetched desc"
+
+        with patch.object(fetcher, "_fetch_description_dba", side_effect=fake_fetch):
+            result = await fetcher.process(listings, {})
+
+        assert all(l.description == "fetched desc" for l in result)
