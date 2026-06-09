@@ -133,16 +133,13 @@ Listings:
         
         batch_size = max(10, context.get("batch_size", context.get("BATCH_SIZE", 30)))
         
-        # Create batches
-        batches = [
-            listings[i : i + batch_size] 
-            for i in range(0, len(listings), batch_size)
-        ]
-        
-        # Process all batches concurrently
-        await asyncio.gather(*[
-            self._process_batch(batch) 
-            for batch in batches
-        ])
+        batches = [listings[i: i + batch_size] for i in range(0, len(listings), batch_size)]
+
+        # Process sequentially to avoid bursting the LLM rate limit.
+        # A short delay between batches gives the API headroom to recover.
+        for i, batch in enumerate(batches):
+            await self._process_batch(batch)
+            if i < len(batches) - 1:
+                await asyncio.sleep(1.5)
         
         return listings

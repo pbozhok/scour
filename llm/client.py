@@ -7,7 +7,6 @@ These clients inherit from BaseLLMClient to follow the Module interface.
 
 import asyncio
 import os
-import subprocess
 from typing import Optional
 
 import httpx
@@ -107,60 +106,59 @@ class GeminiClient(LLMClient):
     ) -> str:
         """
         Use the Gemini CLI to send a prompt and retrieve a response.
-        Passes prompt via stdin to avoid command-line length limits.
+        Passes prompt via stdin using an async subprocess to avoid blocking the event loop.
         Requires 'gemini' command-line tool to be installed.
         """
+        command = ["gemini", "--raw-output", "--accept-raw-output-risk"]
+
         for attempt in range(max_retries):
             try:
-                # Use stdin instead of --prompt argument to avoid length limits
-                command = [
-                    "gemini",
-                    "--raw-output",
-                    "--accept-raw-output-risk",
-                ]
-
-                # Execute the command with prompt via stdin
-                result = subprocess.run(
-                    command, 
-                    input=prompt,
-                    capture_output=True, 
-                    text=True, 
-                    timeout=30,  # 30 second timeout
-                    check=True
+                proc = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(input=prompt.encode()),
+                        timeout=30,
+                    )
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.communicate()
+                    raise
 
-                # Parse and return the response
-                response = result.stdout.strip()
+                if proc.returncode != 0:
+                    err = stderr.decode(errors="replace")
+                    console.print(f"[red]Gemini CLI error (attempt {attempt + 1}): exit code {proc.returncode}[/red]")
+                    if err:
+                        console.print(f"[dim]stderr: {err[:200]}[/dim]")
+                    if attempt == max_retries - 1:
+                        return ""
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+
+                response = stdout.decode(errors="replace").strip()
                 if not response:
                     console.print(f"[yellow]Gemini returned empty response (attempt {attempt + 1})[/yellow]")
                     if attempt < max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                        await asyncio.sleep(2 ** attempt)
                         continue
                     return ""
-                
+
                 console.print(f"[green]Gemini CLI response:[/green] {response[:100]}...")
                 return response
 
-            except subprocess.TimeoutExpired:
+            except asyncio.TimeoutError:
                 console.print(f"[red]Gemini CLI timeout (attempt {attempt + 1})[/red]")
                 if attempt == max_retries - 1:
-                    console.print("[red]Max retries reached. Returning empty string.[/red]")
-                    return ""
-                await asyncio.sleep(2 ** attempt)
-
-            except subprocess.CalledProcessError as e:
-                console.print(f"[red]Gemini CLI error (attempt {attempt + 1}): exit code {e.returncode}[/red]")
-                if e.stderr:
-                    console.print(f"[dim]stderr: {e.stderr[:200]}[/dim]")
-                if attempt == max_retries - 1:
-                    console.print("[red]Max retries reached. Returning empty string.[/red]")
                     return ""
                 await asyncio.sleep(2 ** attempt)
 
             except Exception as e:
                 console.print(f"[red]Unexpected error (attempt {attempt + 1}): {e}[/red]")
                 if attempt == max_retries - 1:
-                    console.print("[red]Max retries reached. Returning empty string.[/red]")
                     return ""
                 await asyncio.sleep(2 ** attempt)
 

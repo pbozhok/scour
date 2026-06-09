@@ -129,8 +129,8 @@ class Pipeline:
                 context = await self._execute_preprocessor(context)
                 logger.info("Query pre-processed", extra={"original_query": context.get_metadata("original_query"), "cleaned_query": context.query})
             
-            # Stage 1: Scraping - fetch listings from all platforms
-            context = await self._execute_stage(ModuleType.SCRAPER, context)
+            # Stage 1: Scraping - fetch listings from all platforms concurrently
+            context = await self._execute_scrapers(context)
             logger.info("Scraping complete", extra={"listing_count": len(context.listings)})
             
             # Stage 2: Processing - price conversion and deduplication only
@@ -380,6 +380,25 @@ class Pipeline:
         
         return context
     
+    async def _execute_scrapers(self, context: PipelineContext) -> PipelineContext:
+        """Run all scrapers concurrently and merge results into context."""
+        scrapers = self._modules.get(ModuleType.SCRAPER, [])
+        if not scrapers:
+            return context
+        logger.info("Executing scrapers concurrently", extra={"scraper_count": len(scrapers)})
+        for scraper in scrapers:
+            if not hasattr(scraper, '_initialized') or not scraper._initialized:
+                scraper.initialize(context.config)
+        results = await asyncio.gather(
+            *[scraper.execute(context) for scraper in scrapers],
+            return_exceptions=True,
+        )
+        for scraper, result in zip(scrapers, results):
+            if isinstance(result, Exception):
+                logger.error("Scraper failed", extra={"scraper": scraper.name, "error": str(result)})
+                context.add_error(module_name=scraper.name, error_type="SCRAPER_ERROR", message=str(result), severity="ERROR")
+        return context
+
     async def _execute_stage(self, module_type: ModuleType, context: PipelineContext) -> PipelineContext:
         """
         Execute all modules of a specific type.
