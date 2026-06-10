@@ -2,6 +2,10 @@
 
 Scrapes DBA, Vinted, and Tradera simultaneously, then uses an LLM to filter, score, and summarize results.
 
+![Landing page](docs/screenshot_landing.png)
+
+![Search results](docs/screenshot_results.png)
+
 ## Installation
 
 ```bash

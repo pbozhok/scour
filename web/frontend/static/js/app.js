@@ -363,6 +363,8 @@ function animateSearchToTop() {
     }, { once: true });
 }
 
+const DEMO_MODE = new URLSearchParams(window.location.search).has('demo');
+
 function submitSearch() {
     const query = elements.searchQuery?.value || document.getElementById('search-query')?.value;
     if (!query || query.trim().length < 1) {
@@ -378,9 +380,11 @@ function submitSearch() {
 
     showLoading();
 
-    const url = `${CONFIG.apiBaseUrl}/search?${buildQueryParams().toString()}`;
+    const fetchPromise = DEMO_MODE
+        ? fetch('/static/fixtures/demo_results.json')
+        : fetch(`${CONFIG.apiBaseUrl}/search?${buildQueryParams().toString()}`, { method: 'GET', headers: { 'Accept': 'application/json' } });
 
-    fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
+    fetchPromise
         .then(response => {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
@@ -390,7 +394,7 @@ function submitSearch() {
             if (!results.length && Array.isArray(data)) results = data;
 
             renderCards({
-                query:        data.query || '',
+                query:         DEMO_MODE ? query : (data.query || ''),
                 results,
                 total_results: data.total_results || data.totalResults || results.length,
                 llm_filtered:  data.llm_filtered || 0,
