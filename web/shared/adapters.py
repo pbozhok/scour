@@ -106,7 +106,10 @@ def review_summary_to_review_response(
         # Try to find rating pattern like "4.5/5" or "4.5 out of 5"
         rating_match = re.search(r'(\d+\.?\d*)\s*/\s*(\d+)', review_summary)
         if rating_match:
-            average_rating = float(rating_match.group(1))
+            raw_rating = float(rating_match.group(1))
+            scale = float(rating_match.group(2))
+            if 1 <= scale <= 10 and 0 <= raw_rating <= scale:
+                average_rating = round(raw_rating * 5.0 / scale, 1) if scale != 5 else raw_rating
         # Try to find count pattern like "(12 reviews)" or "from 12 users"
         count_match = re.search(r'(\d+)\s*(?:reviews?|raters?|users?)', review_summary, re.IGNORECASE)
         if count_match:
