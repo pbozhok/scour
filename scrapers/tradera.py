@@ -2,6 +2,7 @@
 Tradera scraper - for tradera.com second-hand listings.
 """
 
+import asyncio
 import json
 import re
 import urllib.parse
@@ -31,27 +32,52 @@ class TraderaScraper(BaseScraper):
     
     async def scrape(self, query: str, max_results: int = config.DEFAULT_MAX_RESULTS) -> list[Listing]:
         """
-        Scrape Tradera listings from search results.
-        Uses __NEXT_DATA__ JSON if available (server-side rendered data),
-        falls back to HTML parsing for client-side rendered pages.
+        Scrape Tradera listings from search results, paginating until max_results reached.
+        Uses __NEXT_DATA__ JSON if available, falls back to HTML parsing.
+        After collecting all listings, fetches detail pages for any with price=0.
         """
-        url = f"https://www.tradera.com/en/search?q={urllib.parse.quote_plus(query)}"
+        base_url = f"https://www.tradera.com/en/search?q={urllib.parse.quote_plus(query)}"
         listings = []
+        seen_urls: set[str] = set()
 
         async with httpx.AsyncClient(headers=self.headers, follow_redirects=True, timeout=config.SCRAPER_TIMEOUT) as s:
             try:
-                resp = await s.get(url)
-                
-                # First, try to extract data from __NEXT_DATA__ JSON
-                # This is more reliable as Tradera uses Next.js with server-side data
-                next_data = self._extract_next_data(resp.text)
-                if next_data:
-                    listings = self._parse_next_data(next_data, max_results)
-                else:
-                    # Fallback: parse HTML (for older pages or if JSON extraction fails)
-                    self.log_debug("[yellow]Tradera: No __NEXT_DATA__ found, falling back to HTML parsing[/yellow]")
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    listings = await self._parse_html(soup, max_results)
+                for page in range(1, 11):
+                    if len(listings) >= max_results:
+                        break
+
+                    url = f"{base_url}&page={page}" if page > 1 else base_url
+                    try:
+                        resp = await s.get(url)
+                    except Exception:
+                        break
+
+                    next_data = self._extract_next_data(resp.text)
+                    if next_data:
+                        page_listings = self._parse_next_data(next_data, max_results - len(listings))
+                    else:
+                        self.log_debug(f"[yellow]Tradera page {page}: No __NEXT_DATA__, falling back to HTML[/yellow]")
+                        soup = BeautifulSoup(resp.text, "html.parser")
+                        page_listings = await self._parse_html(soup, max_results - len(listings))
+
+                    new_listings = [l for l in page_listings if l.url not in seen_urls]
+                    if not new_listings:
+                        break
+
+                    self.log_debug(f"[blue]Tradera page {page}: {len(new_listings)} new listings[/blue]")
+                    for l in new_listings:
+                        seen_urls.add(l.url)
+                    listings.extend(new_listings)
+
+                # Fetch detail pages for any listings where price is still 0
+                zero_price = [l for l in listings if l.price == 0]
+                if zero_price:
+                    self.log_debug(f"[yellow]Tradera: fetching detail pages for {len(zero_price)} zero-price items[/yellow]")
+                    sem = asyncio.Semaphore(8)
+                    await asyncio.gather(
+                        *[self._fetch_detail_price(s, listing, sem) for listing in zero_price],
+                        return_exceptions=True,
+                    )
 
             except Exception as e:
                 console.print(f"[red]Tradera error: {e}[/red]")
@@ -118,13 +144,17 @@ class TraderaScraper(BaseScraper):
                     continue
                 seen_urls.add(item_url)
                 
-                # Extract price - try multiple fields
-                # buyNowPrice is the fixed price, price is the current bid/starting price
-                price = float(item.get("buyNowPrice", item.get("price", 0)) or 0)
-                
-                # Determine currency - Tradera uses SEK as default
-                # Check for explicit currency field, otherwise default to SEK
-                # (Tradera is a Swedish site, prices are typically in SEK)
+                # Extract price — use `or` chaining so None values fall through to the next field
+                price_val = (
+                    item.get("buyNowPrice") or
+                    item.get("price") or
+                    item.get("currentHighBidAmount") or
+                    item.get("minimumBidAmount") or
+                    item.get("reservationPrice") or
+                    0
+                )
+                price = float(price_val or 0)
+
                 currency_str = item.get("priceCurrency", "SEK").upper()
                 currency = currency_str if currency_str in ["DKK", "SEK", "EUR"] else "SEK"
                 
@@ -222,6 +252,51 @@ class TraderaScraper(BaseScraper):
         
         return listings
     
+    async def _fetch_detail_price(self, s: httpx.AsyncClient, listing: Listing, sem: asyncio.Semaphore) -> None:
+        """Fetch item detail page to recover price when search results return 0."""
+        async with sem:
+            try:
+                resp = await s.get(listing.url, timeout=15)
+                # Try __NEXT_DATA__ on detail page first (more reliable)
+                next_data = self._extract_next_data(resp.text)
+                if next_data:
+                    # Item detail pages keep data at props.pageProps.item (or similar paths)
+                    item_data = (
+                        next_data.get("props", {}).get("pageProps", {}).get("item")
+                        or next_data.get("props", {}).get("pageProps", {}).get("initialState", {}).get("item", {})
+                        or {}
+                    )
+                    price_val = (
+                        item_data.get("buyNowPrice") or
+                        item_data.get("price") or
+                        item_data.get("currentHighBidAmount") or
+                        item_data.get("minimumBidAmount") or
+                        0
+                    )
+                    if price_val:
+                        listing.price = float(price_val)
+                        currency_str = item_data.get("priceCurrency", "SEK").upper()
+                        listing.currency = currency_str if currency_str in ["DKK", "SEK", "EUR"] else "SEK"
+                        return
+
+                # Fallback: scan HTML for a price-like element
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for el in soup.find_all(["span", "div", "p", "strong", "b"]):
+                    text = el.get_text(strip=True)
+                    if len(text) > 50:
+                        continue
+                    if re.search(r'\d[\d\s.]*\s*(DKK|SEK|kr)', text, re.IGNORECASE):
+                        price = self.parse_price(text)
+                        if price > 0:
+                            listing.price = price
+                            if "DKK" in text.upper():
+                                listing.currency = "DKK"
+                            elif "SEK" in text.upper() or "kr" in text.lower():
+                                listing.currency = "SEK"
+                            return
+            except Exception:
+                pass
+
     async def _parse_html(self, soup: BeautifulSoup, max_results: int) -> list[Listing]:
         """Fallback: Parse HTML for item cards (legacy method)."""
         listings = []
