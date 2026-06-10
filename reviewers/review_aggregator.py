@@ -12,15 +12,14 @@ from models import Listing
 from llm import get_client
 from utils import extract_json, normalize_model_name
 from reviewers.search import ReviewSearcher
-from core.module import ModuleType, PipelineContext
+from core.module import Module, ModuleType, PipelineContext
 from core.logging import get_logger
-from reviewers.base import BaseReviewer
 
 console = Console()
 logger = get_logger(__name__, module_name="reviewers.review_aggregator")
 
 
-class ReviewAggregator(BaseReviewer):
+class ReviewAggregator(Module):
     """Aggregates reviews for product models and assigns summaries to listings."""
     
     name = "review-aggregator"
@@ -35,7 +34,7 @@ class ReviewAggregator(BaseReviewer):
             llm_backend: The LLM backend to use (gemini or mistral)
             debug: Whether to print debug information
         """
-        super().__init__()
+        self._initialized = False
         self.llm_backend = llm_backend
         self.debug = debug
         self.searcher = ReviewSearcher()
@@ -73,21 +72,6 @@ class ReviewAggregator(BaseReviewer):
             True if valid
         """
         return self._initialized and self._llm_client is not None
-    
-    async def review(self, listings: List[Any], context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Fetch and summarize reviews for listings.
-        
-        Args:
-            listings: List of listings to review
-            context: Additional context
-            
-        Returns:
-            Dictionary with review information
-        """
-        # This method signature is required by BaseReviewer but we use execute() instead
-        # Return empty dict as we handle reviews in execute()
-        return {}
     
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """

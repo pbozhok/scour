@@ -170,7 +170,7 @@ async def search_items(
                 error="validation_error",
                 message=str(e),
                 details={"query": query}
-            ).dict()
+            ).model_dump()
         )
     except TimeoutError as e:
         logger.error(f"Timeout error for query '{query}': {e}")
@@ -181,7 +181,7 @@ async def search_items(
                 error="timeout",
                 message="Search is taking longer than usual. Please try again.",
                 details={"query": query, "timeout_seconds": str(e.args[0]) if e.args else None}
-            ).dict()
+            ).model_dump()
         )
     except Exception as e:
         logger.exception(f"Unexpected error for query '{query}': {e}")
@@ -192,7 +192,7 @@ async def search_items(
                 error="internal_error",
                 message="An unexpected error occurred. Please try again later.",
                 details={"type": type(e).__name__, "message": str(e)}
-            ).dict()
+            ).model_dump()
         )
 
 
@@ -248,5 +248,5 @@ async def quick_search(
                 error="search_error",
                 message=f"Search failed: {str(e)}",
                 details={"query": query}
-            ).dict()
+            ).model_dump()
         )

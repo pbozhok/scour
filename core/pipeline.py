@@ -134,8 +134,8 @@ class Pipeline:
             logger.info("Scraping complete", extra={"listing_count": len(context.listings)})
             
             # Stage 2: Processing - price conversion and deduplication only
-            context = await self._execute_price_converters(context)
-            context = await self._execute_deduplicators(context)
+            context = await self._execute_named("price-converter", context)
+            context = await self._execute_named("deduplicator", context)
             logger.info("Prices converted and duplicates removed", extra={"listing_count": len(context.listings)})
             
             # Report phase: filtering
@@ -150,7 +150,7 @@ class Pipeline:
             
             # Stage 4: Processing - fetch descriptions for relevant items
             # Run only description fetcher, not all processors
-            context = await self._execute_description_fetchers(context)
+            context = await self._execute_named("description-fetcher", context)
             logger.info("Descriptions fetched", extra={"listing_count": len(context.listings)})
             
             # Report phase: ranking
@@ -164,7 +164,7 @@ class Pipeline:
             logger.info("Second filtering pass complete", extra={"listing_count": len(context.listings)})
             
             # Stage 6: Processing - extract product models
-            context = await self._execute_model_extractors(context)
+            context = await self._execute_named("model-extractor", context)
             logger.info("Product models extracted", extra={"listing_count": len(context.listings)})
             
             # Stage 7: Review aggregation - fetch and summarize reviews
@@ -230,103 +230,17 @@ class Pipeline:
         
         return context
     
-    async def _execute_description_fetchers(self, context: PipelineContext) -> PipelineContext:
-        """
-        Execute only the description fetcher processors.
-        
-        Args:
-            context: The pipeline context
-            
-        Returns:
-            Modified context
-        """
+    async def _execute_named(self, name: str, context: PipelineContext) -> PipelineContext:
+        """Execute the PROCESSOR module with the given name."""
         modules = self._modules.get(ModuleType.PROCESSOR, [])
         for module in modules:
-            if module.name == "description-fetcher":
+            if module.name == name:
                 try:
                     if not hasattr(module, '_initialized') or not module._initialized:
                         module.initialize(context.config)
                     context = await module.execute(context)
                 except Exception as e:
-                    logger.error("Description fetcher failed", extra={"error": str(e)})
-                    context.add_error(
-                        module_name=module.name,
-                        error_type="PROCESSOR_ERROR",
-                        message=str(e)
-                    )
-        return context
-    
-    async def _execute_model_extractors(self, context: PipelineContext) -> PipelineContext:
-        """
-        Execute only the model extractor processors.
-        
-        Args:
-            context: The pipeline context
-            
-        Returns:
-            Modified context
-        """
-        modules = self._modules.get(ModuleType.PROCESSOR, [])
-        for module in modules:
-            if module.name == "model-extractor":
-                try:
-                    if not hasattr(module, '_initialized') or not module._initialized:
-                        module.initialize(context.config)
-                    context = await module.execute(context)
-                except Exception as e:
-                    logger.error("Model extractor failed", extra={"error": str(e)})
-                    context.add_error(
-                        module_name=module.name,
-                        error_type="PROCESSOR_ERROR",
-                        message=str(e)
-                    )
-        return context
-    
-    async def _execute_price_converters(self, context: PipelineContext) -> PipelineContext:
-        """
-        Execute only the price converter processors.
-        
-        Args:
-            context: The pipeline context
-            
-        Returns:
-            Modified context
-        """
-        modules = self._modules.get(ModuleType.PROCESSOR, [])
-        for module in modules:
-            if module.name == "price-converter":
-                try:
-                    if not hasattr(module, '_initialized') or not module._initialized:
-                        module.initialize(context.config)
-                    context = await module.execute(context)
-                except Exception as e:
-                    logger.error("Price converter failed", extra={"error": str(e)})
-                    context.add_error(
-                        module_name=module.name,
-                        error_type="PROCESSOR_ERROR",
-                        message=str(e)
-                    )
-        return context
-    
-    async def _execute_deduplicators(self, context: PipelineContext) -> PipelineContext:
-        """
-        Execute only the deduplicator processors.
-        
-        Args:
-            context: The pipeline context
-            
-        Returns:
-            Modified context
-        """
-        modules = self._modules.get(ModuleType.PROCESSOR, [])
-        for module in modules:
-            if module.name == "deduplicator":
-                try:
-                    if not hasattr(module, '_initialized') or not module._initialized:
-                        module.initialize(context.config)
-                    context = await module.execute(context)
-                except Exception as e:
-                    logger.error("Deduplicator failed", extra={"error": str(e)})
+                    logger.error(f"{name} failed", extra={"error": str(e)})
                     context.add_error(
                         module_name=module.name,
                         error_type="PROCESSOR_ERROR",

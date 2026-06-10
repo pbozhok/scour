@@ -95,7 +95,7 @@ class TestCLIImports:
         """Test that all reviewers can be imported."""
         try:
             import reviewers.search
-            import reviewers.summarizer
+            import reviewers.review_aggregator
         except ImportError as e:
             pytest.fail(f"Failed to import reviewers: {e}")
 
