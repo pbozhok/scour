@@ -61,7 +61,7 @@ class TestFrontendSearchPage:
         """Test that the page contains a loading indicator."""
         response = client.get("/")
         html = response.text
-        assert "loading" in html.lower() or "spinner" in html.lower()
+        assert "loading" in html.lower() or "spinner" in html.lower() or "search-animation" in html.lower()
 
     def test_page_contains_error_message_area(self, client):
         """Test that the page contains an error message area."""
@@ -125,7 +125,7 @@ class TestFrontendAssets:
 class TestFrontendInteractions:
     """Tests for frontend user interactions."""
 
-    def test_api_returns_search_form_structure(self, client, mock_pipeline):
+    def test_api_returns_search_form_structure(self, client):
         """Test that API response can be used by frontend."""
         mock_listing = MagicMock()
         mock_listing.title = "Frontend Test Item"
@@ -163,7 +163,7 @@ class TestFrontendInteractions:
             assert "price" in result
             assert "original_url" in result
 
-    def test_api_returns_sortable_data(self, client, mock_pipeline):
+    def test_api_returns_sortable_data(self, client):
         """Test that API returns data that can be sorted by frontend."""
         listings = []
         for i in range(3):
@@ -201,7 +201,7 @@ class TestFrontendInteractions:
             assert "score" in result
             assert "posted_date" in result or "date" in str(result).lower()
 
-    def test_api_returns_filterable_data(self, client, mock_pipeline):
+    def test_api_returns_filterable_data(self, client):
         """Test that API returns data with filter states."""
         mock_context = MagicMock()
         mock_context.listings = []
@@ -222,7 +222,7 @@ class TestFrontendInteractions:
         assert "reviewing" in data["toggles"]
         assert "scoring" in data["toggles"]
 
-    def test_empty_results_response(self, client, mock_pipeline):
+    def test_empty_results_response(self, client):
         """Test that empty results are handled correctly for frontend."""
         mock_context = MagicMock()
         mock_context.listings = []
@@ -244,7 +244,7 @@ class TestFrontendInteractions:
 class TestFrontendStateManagement:
     """Tests for frontend state management."""
 
-    def test_api_response_includes_all_state_fields(self, client, mock_pipeline):
+    def test_api_response_includes_all_state_fields(self, client):
         """Test that API response includes all fields needed for frontend state."""
         mock_context = MagicMock()
         mock_context.listings = []

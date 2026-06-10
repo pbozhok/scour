@@ -4,6 +4,7 @@ Description fetcher - fetches full descriptions from product pages.
 Implements BaseProcessor for the modular pipeline.
 """
 
+import json
 import re
 import asyncio
 from typing import List, Dict, Any
@@ -108,7 +109,6 @@ class DescriptionFetcher(BaseProcessor):
                 # Try JSON-LD script tag first
                 script = soup.find("script", type="application/ld+json")
                 if script:
-                    import json
                     try:
                         data = json.loads(script.string)
                         text = data.get("description", "") or ""
@@ -204,7 +204,6 @@ class DescriptionFetcher(BaseProcessor):
                 # Try JSON-LD script tag first
                 script = soup.find("script", type="application/ld+json")
                 if script:
-                    import json
                     try:
                         data = json.loads(script.string)
                         text = data.get("description", "") or ""

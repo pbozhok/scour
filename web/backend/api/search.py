@@ -21,7 +21,7 @@ from web.backend.models.schemas import (
     SearchRequest,
     SearchResponse,
 )
-from web.shared.adapters import create_search_response, search_request_to_pipeline_config
+from web.shared.adapters import create_search_response
 
 # Import existing core modules
 from core.pipeline import Pipeline, PipelineConfig
@@ -98,9 +98,6 @@ async def search_items(
         sort_by=sort_by,
     )
     
-    # Convert to pipeline config
-    pipeline_config_dict = search_request_to_pipeline_config(search_request)
-    
     try:
         # Build PipelineConfig from the request
         pipeline_config = PipelineConfig(
@@ -173,7 +170,7 @@ async def search_items(
                 error="validation_error",
                 message=str(e),
                 details={"query": query}
-            ).dict()
+            ).model_dump()
         )
     except TimeoutError as e:
         logger.error(f"Timeout error for query '{query}': {e}")
@@ -184,7 +181,7 @@ async def search_items(
                 error="timeout",
                 message="Search is taking longer than usual. Please try again.",
                 details={"query": query, "timeout_seconds": str(e.args[0]) if e.args else None}
-            ).dict()
+            ).model_dump()
         )
     except Exception as e:
         logger.exception(f"Unexpected error for query '{query}': {e}")
@@ -195,7 +192,7 @@ async def search_items(
                 error="internal_error",
                 message="An unexpected error occurred. Please try again later.",
                 details={"type": type(e).__name__, "message": str(e)}
-            ).dict()
+            ).model_dump()
         )
 
 
@@ -251,5 +248,5 @@ async def quick_search(
                 error="search_error",
                 message=f"Search failed: {str(e)}",
                 details={"query": query}
-            ).dict()
+            ).model_dump()
         )

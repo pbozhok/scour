@@ -9,12 +9,12 @@ The original user query is preserved for filtering/scoring to ensure
 listings match the actual intent, not just the generated keywords.
 """
 
-import json
 import re
 from typing import Optional
 
 from config import DEFAULT_MAX_KEYWORDS
 from llm.client import LLMClient
+from utils import extract_json
 
 
 class QueryPreprocessor:
@@ -141,9 +141,8 @@ Now generate keywords for the user query:"""
             # Try to extract JSON from response
             if self.debug:
                 print(f"[debug] LLM response: {raw_response[:200]}...")
-            
-            # Simple JSON extraction
-            parsed = self._extract_json(raw_response)
+
+            parsed = extract_json(raw_response)
             
             if isinstance(parsed, dict) and "keywords" in parsed:
                 keywords = parsed["keywords"]
@@ -181,29 +180,6 @@ Now generate keywords for the user query:"""
                 print(f"[debug] Error generating keywords: {e}")
             # Return a simple fallback
             return self._generate_fallback_keywords(query, max_keywords)
-    
-    def _extract_json(self, text: str) -> Optional[dict]:
-        """Extract JSON from text response."""
-        # Try to find JSON in the text
-        import re
-        
-        # Look for {...} pattern
-        json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
-        if json_match:
-            try:
-                import json
-                return json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
-        
-        # Try to parse the whole text as JSON
-        try:
-            import json
-            return json.loads(text)
-        except (json.JSONDecodeError, ValueError):
-            pass
-        
-        return None
     
     def _clean_keyword(self, keyword: str) -> str:
         """Clean a single keyword."""

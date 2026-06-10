@@ -23,7 +23,7 @@ from core.logging import (
     get_logger,
     get_console_logger,
 )
-from core.pipeline import Pipeline, PipelineConfig, create_pipeline
+from core.pipeline import Pipeline, PipelineConfig
 
 __all__ = [
     # Module classes
@@ -34,7 +34,6 @@ __all__ = [
     # Pipeline
     'Pipeline',
     'PipelineConfig',
-    'create_pipeline',
     # Registry
     'ModuleRegistry',
     'registry',

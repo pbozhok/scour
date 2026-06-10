@@ -71,7 +71,7 @@ class TestResponsiveCSS:
 class TestResponsiveCardGrid:
     """Tests for responsive card grid behavior."""
 
-    def test_api_returns_data_suitable_for_grid(self, client, mock_pipeline):
+    def test_api_returns_data_suitable_for_grid(self, client):
         """Test that API returns data that can be displayed in a grid."""
         # Create mock listings
         listings = []
@@ -113,7 +113,7 @@ class TestResponsiveCardGrid:
             assert "price" in card
             assert "platform" in card
 
-    def test_api_returns_enough_cards_for_grid(self, client, mock_pipeline):
+    def test_api_returns_enough_cards_for_grid(self, client):
         """Test that API can return enough cards to fill a grid row."""
         # Mobile: 1 column, Tablet: 2 columns, Desktop: 3-4 columns
         # Need at least 4 cards to test grid layout
@@ -152,7 +152,7 @@ class TestResponsiveCardGrid:
 class TestResponsiveImages:
     """Tests for responsive image handling."""
 
-    def test_api_returns_image_urls(self, client, mock_pipeline):
+    def test_api_returns_image_urls(self, client):
         """Test that API returns image URLs for responsive display."""
         mock_listing = MagicMock()
         mock_listing.title = "Image Test Item"
@@ -187,7 +187,7 @@ class TestResponsiveImages:
         assert "image_url" in card
         assert card["image_url"] is not None
 
-    def test_api_handles_missing_images_responsively(self, client, mock_pipeline):
+    def test_api_handles_missing_images_responsively(self, client):
         """Test that API handles missing images for responsive display."""
         mock_listing = MagicMock()
         mock_listing.title = "No Image Responsive Item"

@@ -25,7 +25,7 @@ def client():
 class TestCardDataStructure:
     """Tests for card data structure returned by API."""
 
-    def test_card_data_has_required_fields(self, client, mock_pipeline):
+    def test_card_data_has_required_fields(self, client):
         """Test that card data has all required fields."""
         mock_listing = MagicMock()
         mock_listing.title = "Card Test Item"
@@ -66,7 +66,7 @@ class TestCardDataStructure:
         assert "platform" in card
         assert "image_url" in card
 
-    def test_card_data_has_optional_fields(self, client, mock_pipeline):
+    def test_card_data_has_optional_fields(self, client):
         """Test that card data includes optional fields."""
         mock_listing = MagicMock()
         mock_listing.title = "Optional Fields Item"
@@ -102,7 +102,7 @@ class TestCardDataStructure:
         assert "score" in card
         assert "score_reason" in card
 
-    def test_card_data_handles_missing_image(self, client, mock_pipeline):
+    def test_card_data_handles_missing_image(self, client):
         """Test that cards handle missing images gracefully."""
         mock_listing = MagicMock()
         mock_listing.title = "No Image Item"
@@ -135,7 +135,7 @@ class TestCardDataStructure:
         # image_url should be None or a placeholder
         assert card["image_url"] is None or len(card["image_url"]) > 0
 
-    def test_card_data_handles_missing_price(self, client, mock_pipeline):
+    def test_card_data_handles_missing_price(self, client):
         """Test that cards handle missing prices gracefully."""
         mock_listing = MagicMock()
         mock_listing.title = "No Price Item"
@@ -169,7 +169,7 @@ class TestCardDataStructure:
         assert card["price"] is None
         assert card["currency"] is None
 
-    def test_card_data_handles_missing_description(self, client, mock_pipeline):
+    def test_card_data_handles_missing_description(self, client):
         """Test that cards handle missing descriptions gracefully."""
         mock_listing = MagicMock()
         mock_listing.title = "No Description Item"
@@ -206,7 +206,7 @@ class TestCardDataStructure:
 class TestCardDisplayFields:
     """Tests for specific card display fields."""
 
-    def test_card_has_platform_field(self, client, mock_pipeline):
+    def test_card_has_platform_field(self, client):
         """Test that cards include platform field."""
         mock_listing = MagicMock()
         mock_listing.title = "Platform Item"
@@ -237,7 +237,7 @@ class TestCardDisplayFields:
         card = data["results"][0]
         assert card["platform"] == "Vinted"
 
-    def test_card_has_score_field(self, client, mock_pipeline):
+    def test_card_has_score_field(self, client):
         """Test that cards include score field."""
         mock_listing = MagicMock()
         mock_listing.title = "Score Item"
@@ -268,7 +268,7 @@ class TestCardDisplayFields:
         card = data["results"][0]
         assert card["score"] == 0.98
 
-    def test_card_has_date_field(self, client, mock_pipeline):
+    def test_card_has_date_field(self, client):
         """Test that cards include date field."""
         mock_listing = MagicMock()
         mock_listing.title = "Date Item"
@@ -303,7 +303,7 @@ class TestCardDisplayFields:
 class TestCardHoverData:
     """Tests for card hover data (reviews)."""
 
-    def test_card_includes_review_data(self, client, mock_pipeline):
+    def test_card_includes_review_data(self, client):
         """Test that cards can include review data."""
         mock_listing = MagicMock()
         mock_listing.title = "Review Item"
@@ -335,7 +335,7 @@ class TestCardHoverData:
         # Reviews should be in the response
         assert "reviews" in data
 
-    def test_multiple_cards_with_reviews(self, client, mock_pipeline):
+    def test_multiple_cards_with_reviews(self, client):
         """Test that multiple cards can have review data."""
         listings = []
         for i in range(3):
@@ -350,7 +350,7 @@ class TestCardHoverData:
             listing.description = f"Test {i}"
             listing.date_posted = "2025-05-20"
             listing.images = []
-            listing.review_summary = f"{4.0+i}/5 from {10+i} reviews"
+            listing.review_summary = f"{3.0 + i * 0.5}/5 from {10+i} reviews"
             listing.review_links = [f"https://reviews.example.com/{i}"]
             listings.append(listing)
 
@@ -372,7 +372,7 @@ class TestCardHoverData:
 class TestCardGridDisplay:
     """Tests for card grid display."""
 
-    def test_multiple_cards_returned(self, client, mock_pipeline):
+    def test_multiple_cards_returned(self, client):
         """Test that multiple cards are returned for display."""
         listings = []
         for i in range(10):
@@ -406,7 +406,7 @@ class TestCardGridDisplay:
         assert len(data["results"]) == 10
         assert data["total_results"] == 10
 
-    def test_cards_sorted_by_score(self, client, mock_pipeline):
+    def test_cards_sorted_by_score(self, client):
         """Test that cards are sorted by score for display."""
         listings = []
         for i in range(5):
