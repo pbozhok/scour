@@ -75,6 +75,9 @@ def effective(section: str, key: str):
 
 
 def _apply_env() -> None:
+    import config as _cfg
+
+    # ── API keys → environment variables ──────────────────────────────────────
     keys = _user_config.get("api_keys", {})
     if keys.get("mistral"):
         os.environ["MISTRAL_API_KEY"] = keys["mistral"]
@@ -83,6 +86,30 @@ def _apply_env() -> None:
         os.environ["GEMINI_API_KEY"] = keys["gemini"]
     if keys.get("serpapi"):
         os.environ["SERPAPI_KEY"] = keys["serpapi"]
+
+    # ── Numeric/string constants → config module attributes ───────────────────
+    # Modules that do `config.BATCH_SIZE` (attribute lookup at call time) will
+    # immediately see the new values. Modules that did `from config import X`
+    # won't (the name is already bound), so search.py reads effective() directly.
+    p = _user_config.get("pipeline", {})
+    s = _user_config.get("search", {})
+    r = _user_config.get("reviews", {})
+
+    _set(_cfg, "BATCH_SIZE",            p.get("batch_size"))
+    _set(_cfg, "DELAY_BETWEEN_BATCHES", p.get("delay_between_batches"))
+    _set(_cfg, "SCRAPER_TIMEOUT",       p.get("scraper_timeout"))
+    _set(_cfg, "MAX_RETRIES",           p.get("max_retries"))
+    _set(_cfg, "DEFAULT_MAX_RESULTS",   s.get("default_max_results"))
+    _set(_cfg, "DEFAULT_CURRENCY",      s.get("default_currency"))
+    _set(_cfg, "DEFAULT_MAX_KEYWORDS",  s.get("default_max_keywords"))
+    _set(_cfg, "MAX_REVIEW_RESULTS",    r.get("max_review_results"))
+    _set(_cfg, "REVIEW_DELAY",          r.get("review_delay"))
+
+
+def _set(module, attr: str, value) -> None:
+    """Set module attribute only when a non-None user override exists."""
+    if value is not None:
+        setattr(module, attr, value)
 
 
 # Apply on import

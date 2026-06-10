@@ -37,6 +37,8 @@ import filters
 import reviewers
 import rankers
 
+import user_config as uc
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -99,12 +101,14 @@ async def search_items(
     )
     
     try:
-        # Build PipelineConfig from the request
+        # Build PipelineConfig, applying user config for values that were
+        # frozen as dataclass defaults at import time.
         pipeline_config = PipelineConfig(
             query=query,
-            max_results=max_results or 40,
-            target_currency=currency or "EUR",
-            llm_backend="mistral",  # Default, can be made configurable
+            max_results=max_results or uc.effective("search", "default_max_results"),
+            max_keywords=uc.effective("search", "default_max_keywords"),
+            target_currency=currency or uc.effective("search", "default_currency"),
+            llm_backend="mistral",
             skip_preprocess=False,
             skip_filter=not use_filter,
             skip_score=not use_scoring,
