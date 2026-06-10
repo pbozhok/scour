@@ -3,6 +3,9 @@
 !.env.example
 !.env.template
 
+# User configuration (API keys and personal settings)
+user_config.json
+
 # Agent files
 agents/
 .vibe/

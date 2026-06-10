@@ -1,4 +1,6 @@
-# Second-Hand Product Research Agent
+# Scour
+
+> All the listings. None of the junk.
 
 Scrapes DBA, Vinted, and Tradera simultaneously, then uses an LLM to filter, score, and summarize results.
 

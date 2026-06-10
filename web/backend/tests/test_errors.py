@@ -187,7 +187,7 @@ class TestRootEndpoint:
         response = client.get("/")
         assert response.status_code == 200
         content = response.text
-        assert "Second-Hand Search" in content or "search" in content.lower()
+        assert "Scour" in content or "search" in content.lower()
 
 
 class TestStaticFiles:

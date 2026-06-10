@@ -1,5 +1,5 @@
 """
-Second-hand product research agent
+Scour — All the listings. None of the junk.
 Platforms : DBA, Vinted, Tradera
 LLM       : Google Gemini (gemini-2.0-flash-latest) OR Mistral AI (mistral-large-latest)
 Reviews   : DuckDuckGo HTML scrape (free, no key needed)

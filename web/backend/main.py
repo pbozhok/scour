@@ -1,5 +1,5 @@
 """
-FastAPI application for Second-Hand Search Web Interface
+FastAPI application for Scour — All the listings. None of the junk.
 
 This module provides the main FastAPI application that serves:
 1. REST API endpoints for search functionality
@@ -20,9 +20,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from web.backend.models.schemas import ErrorResponse
+import user_config as uc
 
 # Import API routers
-from web.backend.api import search, search_sse
+from web.backend.api import search, search_sse, config as config_api
 
 
 # Configuration - use absolute paths
@@ -40,8 +41,8 @@ if not os.path.exists(INDEX_HTML_PATH):
 
 # Create FastAPI application
 app = FastAPI(
-    title="Second-Hand Search API",
-    description="Web interface for second-hand product search tool",
+    title="Scour API",
+    description="Scour — All the listings. None of the junk.",
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -58,6 +59,12 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
+
+
+# Load user config on startup (applies API key env overrides)
+@app.on_event("startup")
+async def startup_event():
+    uc.load()
 
 
 # Mount static files
@@ -89,6 +96,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Include API routers
 app.include_router(search.router, prefix="/api/v1", tags=["search"])
 app.include_router(search_sse.router, prefix="/api/v1", tags=["search", "sse"])
+app.include_router(config_api.router, prefix="/api/v1", tags=["config"])
 
 
 # Root endpoint - serve the main HTML page

@@ -1,5 +1,5 @@
 """
-Pydantic models for the Second-Hand Search API.
+Pydantic models for the Scour API.
 
 These models define the request/response schemas for the web interface API.
 They are used for:
