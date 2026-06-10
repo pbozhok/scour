@@ -158,21 +158,20 @@ Listings:
                         console.print(f"[yellow]Retrying in {wait_time:.1f}s due to error: {e}[/yellow]")
                         await asyncio.sleep(wait_time)
 
-        total_batches = (len(listings) + batch_size - 1) // batch_size
+        batches = [listings[i:i + batch_size] for i in range(0, len(listings), batch_size)]
+        total_batches = len(batches)
         total_discarded = 0
 
-        for i in range(0, len(listings), batch_size):
-            batch_num = i // batch_size + 1
-            batch = listings[i:i + batch_size]
-            console.print(f"Judging batch {batch_num}/{total_batches} ({len(batch)} items)...")
-            await judge_batch(batch, query)
+        sem = asyncio.Semaphore(3)  # max 3 concurrent LLM calls
 
-            # Count discarded in this batch
-            batch_discarded = sum(1 for l in batch if not getattr(l, 'relevant', False))
-            total_discarded += batch_discarded
+        async def judge_batch_guarded(batch: list, batch_num: int) -> None:
+            async with sem:
+                console.print(f"Judging batch {batch_num}/{total_batches} ({len(batch)} items)...")
+                await judge_batch(batch, query)
 
-            if i + batch_size < len(listings):
-                await asyncio.sleep(delay_between_batches)
+        await asyncio.gather(*[
+            judge_batch_guarded(batch, i + 1) for i, batch in enumerate(batches)
+        ])
 
         if not any(getattr(l, 'relevant', False) for l in listings):
             console.print("[yellow]No relevant listings found. Marking all as relevant as fallback.[/yellow]")

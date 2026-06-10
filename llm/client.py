@@ -166,9 +166,21 @@ class GeminiClient(LLMClient):
         return ""
 
 
+# Module-level semaphore shared across all MistralClient instances.
+# Limits total concurrent Mistral calls to avoid hammering rate limits.
+_mistral_sem: asyncio.Semaphore | None = None
+
+
+def _get_mistral_sem() -> asyncio.Semaphore:
+    global _mistral_sem
+    if _mistral_sem is None:
+        _mistral_sem = asyncio.Semaphore(3)
+    return _mistral_sem
+
+
 class MistralClient(LLMClient):
     """Mistral LLM client using the Mistral AI API."""
-    
+
     name: str = "mistral-client"
     module_type = None  # LLM clients are service objects, not pipeline stages
     version: str = "1.0.0"
@@ -186,52 +198,48 @@ class MistralClient(LLMClient):
             console.print("[red]Error: Mistral library not installed.[/red]")
             console.print("[yellow]Install with: pip install mistralai[/yellow]")
             raise
-    
+
     async def chat(
         self,
         prompt: str,
         temperature: float = 0.0,
         max_retries: int = 5,
     ) -> str:
-        """Use Mistral AI API to send a prompt and retrieve a response."""
+        """Use Mistral AI API to send a prompt and retrieve a response (async)."""
         for attempt in range(max_retries):
             try:
-                with self.mistral_module(api_key=self.api_key) as mistral:
-                    res = mistral.chat.complete(
-                        model="mistral-medium-3-5",
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": prompt,
-                            },
-                        ],
-                        stream=False,
-                        response_format={"type": "text"},
-                        temperature=temperature,
-                    )
-                    
-                    response = res.choices[0].message.content.strip()
-                    if not response:
-                        console.print(f"[yellow]Mistral returned empty response (attempt {attempt + 1})[/yellow]")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(2 ** attempt)
-                            continue
-                        return ""
-                    
-                    console.print(f"[green]Mistral API response:[/green] {response[:100]}...")
-                    return response
+                async with _get_mistral_sem():
+                    async with self.mistral_module(api_key=self.api_key) as mistral:
+                        res = await mistral.chat.complete_async(
+                            model="mistral-medium-3-5",
+                            messages=[{"role": "user", "content": prompt}],
+                            response_format={"type": "text"},
+                            temperature=temperature,
+                        )
+
+                response = res.choices[0].message.content.strip()
+                if not response:
+                    console.print(f"[yellow]Mistral returned empty response (attempt {attempt + 1})[/yellow]")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    return ""
+
+                console.print(f"[green]Mistral API response:[/green] {response[:100]}...")
+                return response
 
             except Exception as e:
                 error_msg = str(e).lower()
-                if "quota" in error_msg or "rate limit" in error_msg:
-                    console.print(f"[red]Mistral rate limit/quota (attempt {attempt + 1}): {str(e)[:100]}[/red]")
+                if "quota" in error_msg or "rate limit" in error_msg or "429" in str(e):
+                    wait = 2 ** attempt
+                    console.print(f"[red]Mistral rate limit (attempt {attempt + 1}), waiting {wait}s[/red]")
                 else:
                     console.print(f"[red]Mistral API error (attempt {attempt + 1}): {str(e)[:100]}[/red]")
-                
+
                 if attempt == max_retries - 1:
                     console.print("[red]Max retries reached. Returning empty string.[/red]")
                     return ""
-                
+
                 await asyncio.sleep(2 ** attempt)
 
         console.print("[red]Exhausted retries. Returning empty string.[/red]")

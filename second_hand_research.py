@@ -23,6 +23,7 @@ from rich.console import Console
 
 import config
 # Import module directories to trigger scraper/filter/processor/reviewer registration
+import scrapers
 import processors
 import filters
 import reviewers

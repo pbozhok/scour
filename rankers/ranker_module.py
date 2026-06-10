@@ -4,6 +4,7 @@ Ranker module - scores and ranks listings based on multiple factors.
 Implements Module interface for the modular pipeline.
 """
 
+import asyncio
 import json
 from typing import List, Dict, Any
 
@@ -141,57 +142,54 @@ class RankerModule(Module):
             if listing.price > 10000:
                 console.print(f"[yellow]⚠️  Suspicious price: {listing.title} ({listing.platform}): {listing.price} {listing.currency}[/yellow]")
         
-        items_json = json.dumps(
-            [
-                {
-                    "id": i,
-                    "title": l.title,
-                    "description": l.description,
-                    "price": l.price,
-                    "currency": l.currency,
-                    "platform": l.platform,
-                    "review_summary": getattr(l, 'review_summary', ''),
-                }
-                for i, l in enumerate(listings)
-            ],
-            ensure_ascii=False,
+        _BATCH = 30  # items per scoring call
+
+        score_prompt = (
+            f'The user is looking for: "{user_query}"\n\n'
+            "Score each listing 1-10 based on: value for money, how well it matches "
+            "the user's need, condition indicators (new/unused/damage), and review quality.\n\n"
+            'Return ONLY: {"scores": [{"id": 0, "score": 7.5, "reason": "one sentence"}]}\n\n'
+            "Listings:\n"
         )
 
-        prompt = f"""The user is looking for: "{user_query}"
-
-Score each of the following second-hand listings from 1 to 10 based on:
-- Value for money (price vs. typical market price)
-- How well it matches the user's stated need
-- Condition and quality indicators from the title AND description (mentions of new/unused, damage, original packaging, accessories included, etc.)
-- Review quality (positive reviews = higher score)
-
-Pay special attention to the description field which contains important details about the item's condition and what's included.
-
-Return ONLY a JSON object:
-{{"scores": [{{"id": 0, "score": 7.5, "reason": "one sentence"}}]}}
-
-Listings:
-{items_json}"""
+        async def score_batch(batch: list, offset: int) -> None:
+            items_json = json.dumps(
+                [
+                    {
+                        "id": offset + i,
+                        "title": l.title,
+                        "description": (l.description or "")[:200],
+                        "price": l.price,
+                        "currency": l.currency,
+                        "platform": l.platform,
+                        "review_summary": getattr(l, 'review_summary', ''),
+                    }
+                    for i, l in enumerate(batch)
+                ],
+                ensure_ascii=False,
+            )
+            try:
+                raw = await self._llm_client.chat(score_prompt + items_json, temperature=0.1)
+                parsed = extract_json(raw)
+                scores = parsed.get("scores", []) if isinstance(parsed, dict) else []
+                for s in scores:
+                    idx = s.get("id")
+                    if idx is not None and 0 <= idx < len(listings):
+                        listings[idx].score = float(s.get("score", 0))
+                        listings[idx].score_reason = s.get("reason", "")
+            except Exception as e:
+                console.print(f"[red]Scoring error: {e} — falling back to price sort[/red]")
 
         console.print("[bold cyan]Scoring and ranking...[/bold cyan]")
-        try:
-            raw = await self._llm_client.chat(prompt, temperature=0.1)
-            parsed = extract_json(raw)
-            scores = parsed.get("scores", []) if isinstance(parsed, dict) else []
+        batches = [(listings[i:i + _BATCH], i) for i in range(0, len(listings), _BATCH)]
+        await asyncio.gather(*[score_batch(b, off) for b, off in batches])
 
-            for s in scores:
-                idx = s.get("id")
-                if idx is not None and 0 <= idx < len(listings):
-                    listings[idx].score = float(s.get("score", 0))
-                    listings[idx].score_reason = s.get("reason", "")
-        except Exception as e:
-            console.print(f"[red]Scoring error: {e} — falling back to price sort[/red]")
-            # Fallback: score inversely by price (cheaper = higher score)
-            prices = [l.price for l in listings if l.price > 0]
-            if prices:
-                max_p = max(prices)
-                for l in listings:
-                    l.score = round(10 * (1 - l.price / max_p), 1) if l.price > 0 else 5.0
+        # Fallback for any listing that wasn't scored
+        prices = [l.price for l in listings if l.price > 0]
+        max_p = max(prices) if prices else 1
+        for l in listings:
+            if not l.score:
+                l.score = round(10 * (1 - l.price / max_p), 1) if l.price > 0 else 5.0
 
         listings.sort(key=lambda l: l.score, reverse=True)
         return listings

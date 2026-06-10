@@ -6,6 +6,7 @@ a series of modules (scrapers, filters, processors, reviewers).
 """
 
 import asyncio
+import time
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 
@@ -115,78 +116,98 @@ class Pipeline:
         total_phases = 6  # initiating, fetching, filtering, ranking, loading, complete
         current_phase = 1  # fetching
         
+        def _tick(label: str, t0: float) -> float:
+            elapsed = time.perf_counter() - t0
+            console.print(f"[bold cyan][TIMER] {label}: {elapsed:.1f}s[/bold cyan]")
+            return time.perf_counter()
+
         try:
+            from rich.console import Console as _C
+            console = _C()
+
             # Load modules if not already loaded
             if not self._modules:
                 self.load_modules()
-            
+
+            t = time.perf_counter()
+            pipeline_start = t
+
             # Report phase: fetching
             if phase_callback:
                 phase_callback("fetching", current_phase, total_phases)
-            
+
             # Stage 0: Pre-processing (optional) - generates cleaned query and search keywords
             if not config.skip_preprocess and self._preprocessor:
                 context = await self._execute_preprocessor(context)
+                t = _tick("preprocess", t)
                 logger.info("Query pre-processed", extra={"original_query": context.get_metadata("original_query"), "cleaned_query": context.query})
-            
+
             # Stage 1: Scraping - fetch listings from all platforms concurrently
             context = await self._execute_scrapers(context)
+            t = _tick(f"scraping ({len(context.listings)} listings)", t)
             logger.info("Scraping complete", extra={"listing_count": len(context.listings)})
-            
+
             # Stage 2: Processing - price conversion and deduplication only
             context = await self._execute_named("price-converter", context)
             context = await self._execute_named("deduplicator", context)
+            t = _tick(f"price+dedup ({len(context.listings)} listings)", t)
             logger.info("Prices converted and duplicates removed", extra={"listing_count": len(context.listings)})
-            
+
             # Report phase: filtering
             current_phase = 2
             if phase_callback:
                 phase_callback("filtering", current_phase, total_phases)
-            
-            # Stage 3: Filtering (1st pass) - initial relevance filtering
-            # When skip_filter=True, use keyword filter; otherwise use LLM filter
-            context = await self._execute_filter_pass(context, use_llm=not config.skip_filter, pass_num=1)
-            logger.info("First filtering pass complete", extra={"listing_count": len(context.listings)})
-            
-            # Stage 4: Processing - fetch descriptions for relevant items
-            # Run only description fetcher, not all processors
+
+            # Stage 3: Fetch descriptions before filtering so the LLM has full context
             context = await self._execute_named("description-fetcher", context)
+            t = _tick(f"description fetch ({len(context.listings)} listings)", t)
             logger.info("Descriptions fetched", extra={"listing_count": len(context.listings)})
-            
+
             # Report phase: ranking
             current_phase = 3
             if phase_callback:
                 phase_callback("ranking", current_phase, total_phases)
-            
-            # Stage 5: Filtering (2nd pass) - filtering with full descriptions
-            # Use the same filter type as pass 1
-            context = await self._execute_filter_pass(context, use_llm=not config.skip_filter, pass_num=2)
-            logger.info("Second filtering pass complete", extra={"listing_count": len(context.listings)})
-            
+
+            # Stage 4: Single filter pass with full descriptions available
+            context = await self._execute_filter_pass(context, use_llm=not config.skip_filter, pass_num=1)
+            t = _tick(f"filter ({len(context.listings)} listings kept)", t)
+            logger.info("Filtering complete", extra={"listing_count": len(context.listings)})
+
+            # Cap to max_results before the expensive LLM steps (model extraction + scoring).
+            # Each scraper returns up to max_results, so the combined pool can be 3× larger.
+            _max = config.max_results
+            if len(context.listings) > _max:
+                context.listings = context.listings[:_max]
+                console.print(f"[dim]Capped to {_max} listings for model extraction and scoring[/dim]")
+
             # Stage 6: Processing - extract product models
             context = await self._execute_named("model-extractor", context)
+            t = _tick(f"model extraction ({len(context.listings)} listings)", t)
             logger.info("Product models extracted", extra={"listing_count": len(context.listings)})
-            
+
             # Stage 7: Review aggregation - fetch and summarize reviews
             if not config.skip_reviews:
                 context = await self._execute_stage(ModuleType.REVIEWER, context)
+                t = _tick(f"reviews ({len(context.listings)} listings)", t)
                 logger.info("Reviews aggregated", extra={"listing_count": len(context.listings)})
             else:
                 logger.info("Reviews skipped (--no-reviews flag)")
-            
+
             # Stage 8: Scoring/Ranking - score and rank listings
             if not config.skip_score:
                 context = await self._execute_stage(ModuleType.RANKER, context)
+                t = _tick(f"scoring ({len(context.listings)} listings)", t)
                 logger.info("Listings scored and ranked", extra={"listing_count": len(context.listings)})
             else:
                 logger.info("Scoring skipped (--no-score flag)")
-            
+
             # Report phase: loading
             current_phase = 4
             if phase_callback:
                 phase_callback("loading", current_phase, total_phases)
-            
-            logger.info("Pipeline completed", 
+
+            _tick(f"TOTAL pipeline ({len(context.listings)} final listings)", pipeline_start)
+            logger.info("Pipeline completed",
                        extra={"final_listing_count": len(context.listings), "error_count": len(context.errors)})
             
         except Exception as e:
