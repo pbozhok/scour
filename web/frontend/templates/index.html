@@ -4,19 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Second-Hand Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="stylesheet" href="/static/css/search-animation.css">
 </head>
 <body>
-    <!-- Search Container - starts in center, moves to top on search -->
     <div class="search-container" id="search-container">
         <div class="search-box">
             <h1>Second-Hand Search</h1>
+            <p class="tagline">// ai-powered · multi-platform · smart filtering</p>
+
             <form id="search-form">
                 <div class="search-input-group">
-                    <input 
-                        type="text" 
-                        name="query" 
+                    <input
+                        type="text"
+                        name="query"
                         id="search-query"
                         placeholder="Search for items..."
                         required
@@ -25,24 +29,22 @@
                         autocomplete="off"
                     >
                     <button type="submit" class="search-button">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.35-4.35"></path>
                         </svg>
-                        Smart Search
+                        Search
                     </button>
                 </div>
-                
-                <!-- Hidden fields for toggles and sorting -->
-                <input type="hidden" name="use_filter" value="true" id="toggle-filter">
+
+                <input type="hidden" name="use_filter"  value="true" id="toggle-filter">
                 <input type="hidden" name="use_reviews" value="true" id="toggle-reviews">
                 <input type="hidden" name="use_scoring" value="true" id="toggle-scoring">
-                <input type="hidden" name="sort_by" value="score" id="sort-selector">
+                <input type="hidden" name="sort_by"     value="score" id="sort-selector">
                 <input type="hidden" name="max_results" value="40">
-                <input type="hidden" name="currency" value="EUR">
+                <input type="hidden" name="currency"    value="EUR">
             </form>
-            
-            <!-- Toggle Controls -->
+
             <div class="toggle-controls">
                 <label class="toggle-item">
                     <input type="checkbox" checked onchange="updateToggle('filter', this.checked)">
@@ -60,32 +62,23 @@
                     <span class="toggle-label">Scoring</span>
                 </label>
             </div>
-            
-            <!-- Sort Controls -->
+
             <div class="sort-controls">
-                <span class="sort-label">Sort by:</span>
-                <button class="sort-button active" data-sort="score" onclick="setSortAndSearch('score')">Score</button>
-                <button class="sort-button" data-sort="price_asc" onclick="setSortAndSearch('price_asc')">Price (Low)</button>
-                <button class="sort-button" data-sort="price_desc" onclick="setSortAndSearch('price_desc')">Price (High)</button>
-                <button class="sort-button" data-sort="date" onclick="setSortAndSearch('date')">Date</button>
+                <span class="sort-label">sort:</span>
+                <button class="sort-button active" data-sort="score"      onclick="setSortAndSearch('score')">Score</button>
+                <button class="sort-button"         data-sort="price_asc"  onclick="setSortAndSearch('price_asc')">Price ↑</button>
+                <button class="sort-button"         data-sort="price_desc" onclick="setSortAndSearch('price_desc')">Price ↓</button>
+                <button class="sort-button"         data-sort="date"       onclick="setSortAndSearch('date')">Date</button>
             </div>
         </div>
     </div>
 
-    <!-- Search Animation Container -->
     <div id="search-animation" class="search-animation-container" style="display: none;"></div>
-
-    <!-- Error Message -->
-    <div id="error-message" class="error-message" style="display: none;"></div>
-
-    <!-- Results Container -->
+    <div id="error-message"    class="error-message"             style="display: none;"></div>
     <div id="results-container" class="results-container"></div>
 
-    <!-- Main App Script -->
     <script src="/static/js/app.js"></script>
-    <!-- Search Animation Script -->
     <script src="/static/js/search-animation.js"></script>
-    <!-- Search Animation Integration -->
     <script src="/static/js/search-animation-integration.js"></script>
 </body>
 </html>
