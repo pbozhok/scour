@@ -8,6 +8,10 @@ Scrapes DBA, Vinted, and Tradera simultaneously, then uses an LLM to filter, sco
 
 ![Search results](docs/screenshot_results.png)
 
+![Settings](docs/screenshot_settings.png)
+
+API keys (Mistral, Gemini, SerpAPI) can be entered directly in the Settings panel — no config files needed.
+
 ## Installation
 
 ```bash

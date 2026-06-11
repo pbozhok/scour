@@ -13,6 +13,14 @@ with sync_playwright() as p:
     page.screenshot(path="docs/screenshot_landing.png")
     print("landing done")
 
+    # Settings screenshot
+    page.click("#config-btn")
+    page.wait_for_selector("#config-modal-body input", timeout=5000)
+    page.screenshot(path="docs/screenshot_settings.png")
+    print("settings done")
+    page.click("#config-modal-close")
+    page.wait_for_timeout(200)
+
     # Results screenshot — demo mode gives instant results
     page.goto(f"{BASE}?demo")
     page.wait_for_load_state("networkidle")
