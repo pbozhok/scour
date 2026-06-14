@@ -24,6 +24,20 @@ const CONFIG = {
     debounceDelay: 300
 };
 
+function applyUserConfig(data) {
+    const search = data?.config?.search;
+    if (!search) return;
+    if (search.default_max_results != null) CONFIG.defaultMaxResults = search.default_max_results;
+    if (search.default_currency)           CONFIG.defaultCurrency    = search.default_currency;
+}
+
+async function initUserConfig() {
+    try {
+        const res = await fetch('/api/v1/config');
+        if (res.ok) applyUserConfig(await res.json());
+    } catch (_) {}
+}
+
 // ============================================
 // DOM Elements (cached)
 // ============================================
@@ -534,6 +548,7 @@ function initSearchPosition() {
 
 document.addEventListener('DOMContentLoaded', () => {
     cacheElements();
+    initUserConfig();
     initSearchPosition();
     initToggleControls();
     initSortControls();

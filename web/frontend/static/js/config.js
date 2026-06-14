@@ -179,6 +179,7 @@ async function saveConfig() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         toast('settings saved');
         closeSettingsModal();
+        if (typeof initUserConfig === 'function') initUserConfig();
     } catch (e) {
         toast(`save failed: ${e.message}`, true);
     } finally {
