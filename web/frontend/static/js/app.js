@@ -9,6 +9,7 @@ const STATE = {
     useFilter: true,
     useReviews: true,
     useScoring: true,
+    lastResults: [],
 };
 
 // ============================================
@@ -237,11 +238,14 @@ function renderCards(response) {
         timeNote = ` · <span class="results-time">${secs}s</span>`;
     }
 
+    STATE.lastResults = response.results || [];
+
     const headerHtml = `
         <div class="results-header">
             <span class="results-count">
                 <em>${response.total_results}</em> results for "<em>${escapeHtml(response.query)}</em>"${filteredNote}${timeNote}
             </span>
+            <button class="copy-results-btn" title="Copy results as JSON" onclick="copyResultsJson()">copy</button>
         </div>`;
 
     const fragment = document.createDocumentFragment();
@@ -256,6 +260,29 @@ function renderCards(response) {
     fragment.appendChild(grid);
     container.innerHTML = headerHtml;
     container.appendChild(fragment);
+}
+
+function copyResultsJson() {
+    const data = STATE.lastResults.map(item => ({
+        title: item.title || null,
+        link: item.original_url || null,
+        price: item.price || null,
+        currency: item.currency || null,
+        posted_date: item.posted_date || null,
+        platform: item.platform || null,
+        score: item.score || null,
+        reason: item.score_reason || null,
+    }));
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
+        const btn = document.querySelector('.copy-results-btn');
+        if (!btn) return;
+        btn.textContent = 'copied!';
+        btn.classList.add('copy-results-btn--copied');
+        setTimeout(() => {
+            btn.textContent = 'copy';
+            btn.classList.remove('copy-results-btn--copied');
+        }, 2000);
+    });
 }
 
 function sortResults(sortBy) {
