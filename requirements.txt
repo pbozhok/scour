@@ -1,0 +1,11 @@
+beautifulsoup4
+fastapi
+httpx
+lxml
+mistralai
+pydantic
+python-dotenv
+requests
+rich
+uvicorn
+vinted-scraper

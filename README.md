@@ -20,8 +20,18 @@ cd second_hand_searcher
 python -m venv venv
 venv\Scripts\activate        # Windows
 # source venv/bin/activate   # macOS/Linux
-pip install httpx beautifulsoup4 rich python-dotenv requests mistralai vinted-scraper
+pip install -r requirements.txt
 ```
+
+## Desktop shortcut (Windows)
+
+After completing the installation, create a one-click desktop icon:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File launcher\install-shortcut.ps1
+```
+
+This places a **Scour** shortcut on your Desktop. Double-clicking it starts the server (if not already running) and opens the app in your browser. Run the command again if you move the project folder.
 
 ## Configuration
 
@@ -58,12 +68,11 @@ python second_hand_research.py "Nikon Z6" --no-filter --no-score --no-reviews  #
 ## Web Interface
 
 ```bash
-pip install fastapi uvicorn
-uvicorn web.backend.main:app --reload --port 8000
-# Open http://localhost:8000
+uvicorn web.backend.main:app --reload --port 8001
+# Open http://localhost:8001
 ```
 
-Interactive API docs are available at `http://localhost:8000/api/docs`.
+Interactive API docs are available at `http://localhost:8001/api/docs`.
 
 ## Testing
 
