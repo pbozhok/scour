@@ -18,6 +18,16 @@ Usage:
 
 import asyncio
 import argparse
+import sys
+
+# Ensure UTF-8 output on Windows so result titles / status glyphs (e.g. "✗")
+# don't crash the legacy cp1252 console with a UnicodeEncodeError.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
 
 from rich.console import Console
 
