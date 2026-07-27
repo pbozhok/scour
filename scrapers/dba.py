@@ -133,6 +133,11 @@ class DBAScraper(BaseScraper):
                     if date_match:
                         listing.date_posted = _parse_dba_date(date_match.group(0))
 
+                # Location from object-address element (.string works; .get_text() returns empty here)
+                addr_el = detail_soup.find(attrs={"data-testid": "object-address"})
+                if addr_el:
+                    listing.location = (addr_el.string or "").strip()
+
             except (httpx.TimeoutException, httpx.HTTPStatusError):
                 pass
             except Exception:

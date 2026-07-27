@@ -26,3 +26,4 @@ class Listing:
     score: float = 0.0
     score_reason: str = ""
     date_posted: str = ""
+    location: str = ""
