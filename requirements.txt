@@ -1,4 +1,6 @@
 beautifulsoup4
+ddgs
+fake-useragent
 fastapi
 httpx
 lxml
@@ -7,5 +9,6 @@ pydantic
 python-dotenv
 requests
 rich
+sse-starlette
 uvicorn
 vinted-scraper
