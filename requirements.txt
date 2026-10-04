@@ -2,7 +2,7 @@ beautifulsoup4
 ddgs
 fake-useragent
 fastapi
-httpx
+httpx[http2]
 lxml
 mistralai
 pydantic
