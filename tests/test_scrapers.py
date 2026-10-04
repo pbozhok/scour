@@ -79,7 +79,7 @@ class TestConcreteScrapersContract:
         """VintedScraper must have name, module_type, version, platform."""
         assert VintedScraper.name == "vinted-scraper"
         assert VintedScraper.module_type == ModuleType.SCRAPER
-        assert VintedScraper.version == "1.0.0"
+        assert VintedScraper.version == "2.0.0"
         assert VintedScraper.platform == "Vinted"
     
     def test_tradera_scraper_inherits_from_base_scraper(self):

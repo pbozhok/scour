@@ -11,4 +11,3 @@ requests
 rich
 sse-starlette
 uvicorn
-vinted-scraper
