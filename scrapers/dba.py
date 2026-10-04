@@ -330,5 +330,10 @@ class DBAScraper(BaseScraper):
             except Exception as e:
                 console.print(f"[red]DBA error: {e}[/red]")
 
-        console.print(f"[green]DBA:[/green] {len(listings)} listings found")
-        return listings
+        kept = self.filter_by_relevance(listings, query)
+        if len(kept) < len(listings):
+            self.log_debug(
+                f"[yellow]DBA: dropped {len(listings) - len(kept)} loose matches[/yellow]"
+            )
+        console.print(f"[green]DBA:[/green] {len(kept)} listings found")
+        return kept

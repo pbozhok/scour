@@ -137,6 +137,34 @@ class BaseScraper(Module):
         
         return context
     
+    @staticmethod
+    def filter_by_relevance(listings, query: str, min_ratio: float = 0.5):
+        """
+        Drop listings that only loosely match the query.
+
+        Platform search engines stem and OR-match, so a search for
+        "KEEN Jasper Zionic" comes back padded with Carolyn Keene novels.
+        Keep a listing only when at least `min_ratio` of the query's
+        meaningful tokens appear as whole words in its title or description.
+        """
+        import re as _re
+
+        tokens = [t for t in _re.findall(r"[\wÀ-ɏ]+", query.lower()) if len(t) >= 3]
+        if not tokens:
+            return listings
+
+        needed = max(1, int(len(tokens) * min_ratio + 0.5))
+        kept = []
+        for listing in listings:
+            haystack = f"{listing.title} {listing.description}".lower()
+            hits = sum(
+                1 for t in tokens
+                if _re.search(rf"(?<![\wÀ-ɏ]){_re.escape(t)}(?![\wÀ-ɏ])", haystack)
+            )
+            if hits >= needed:
+                kept.append(listing)
+        return kept
+
     def log_debug(self, message: str):
         """Print debug message if debug mode is enabled."""
         if self.debug:

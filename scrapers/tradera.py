@@ -82,8 +82,13 @@ class TraderaScraper(BaseScraper):
             except Exception as e:
                 console.print(f"[red]Tradera error: {e}[/red]")
 
-        console.print(f"[green]Tradera:[/green] {len(listings)} listings found")
-        return listings
+        kept = self.filter_by_relevance(listings, query)
+        if len(kept) < len(listings):
+            self.log_debug(
+                f"[yellow]Tradera: dropped {len(listings) - len(kept)} loose matches[/yellow]"
+            )
+        console.print(f"[green]Tradera:[/green] {len(kept)} listings found")
+        return kept
     
     def _extract_next_data(self, html: str) -> dict | None:
         """Extract __NEXT_DATA__ JSON from HTML."""
