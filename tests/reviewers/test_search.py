@@ -18,96 +18,82 @@ class TestReviewSearcher:
         assert hasattr(searcher, 'search_serpapi')
         assert hasattr(searcher, 'search_reviews')
 
-    @patch('httpx.AsyncClient')
-    def test_search_duckduckgo(self, mock_async_client):
-        """Test DuckDuckGo search."""
-        # Mock response
-        mock_response = MagicMock()
-        mock_response.text = """
-        <div class="result">
-            <a class="result__title">Test Review</a>
-            <a class="result__url">https://example.com</a>
-            <div class="result__snippet">Great product review</div>
-        </div>
-        """
-        
-        # Mock the async context manager
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_async_client.return_value = mock_client
-        
-        searcher = ReviewSearcher()
-        results = asyncio.run(searcher.search_duckduckgo("iPhone 15"))
-        
+    @staticmethod
+    def _ddgs_returning(rows):
+        """Stand in for reviewers.search.DDGS, used as a context manager."""
+        ddgs = MagicMock()
+        ddgs.text = MagicMock(return_value=rows)
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=ddgs)
+        cm.__exit__ = MagicMock(return_value=False)
+        factory = MagicMock(return_value=cm)
+        factory.ddgs = ddgs
+        return factory
+
+    def test_search_duckduckgo(self):
+        """Results from the DDGS library are mapped onto title/snippet/url."""
+        factory = self._ddgs_returning([
+            {"title": "Test Review", "body": "Great product review", "href": "https://example.com"},
+        ])
+        with patch("reviewers.search.DDGS", factory):
+            searcher = ReviewSearcher()
+            results = asyncio.run(searcher.search_duckduckgo("iPhone 15"))
+
         assert len(results) == 1
         assert results[0]["title"] == "Test Review"
         assert results[0]["url"] == "https://example.com"
         assert results[0]["snippet"] == "Great product review"
 
-    @patch('httpx.AsyncClient')
-    def test_search_duckduckgo_no_results(self, mock_async_client):
+    def test_search_duckduckgo_no_results(self):
         """Test DuckDuckGo search with no results."""
-        mock_response = MagicMock()
-        mock_response.text = "<html><body>No results</body></html>"
-        
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_async_client.return_value = mock_client
-        
-        searcher = ReviewSearcher()
-        results = asyncio.run(searcher.search_duckduckgo("iPhone 15"))
-        
+        with patch("reviewers.search.DDGS", self._ddgs_returning([])):
+            searcher = ReviewSearcher()
+            results = asyncio.run(searcher.search_duckduckgo("iPhone 15"))
+
         assert results == []
 
-    @patch('httpx.AsyncClient')
-    def test_search_duckduckgo_max_results(self, mock_async_client):
-        """Test DuckDuckGo search respects max_results."""
-        mock_response = MagicMock()
-        mock_response.text = """
-        <div class="result">
-            <a class="result__title">Review 1</a>
-            <a class="result__url">https://example1.com</a>
-            <div class="result__snippet">Snippet 1</div>
-        </div>
-        <div class="result">
-            <a class="result__title">Review 2</a>
-            <a class="result__url">https://example2.com</a>
-            <div class="result__snippet">Snippet 2</div>
-        </div>
-        <div class="result">
-            <a class="result__title">Review 3</a>
-            <a class="result__url">https://example3.com</a>
-            <div class="result__snippet">Snippet 3</div>
-        </div>
-        """
-        
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_async_client.return_value = mock_client
-        
-        searcher = ReviewSearcher()
-        results = asyncio.run(searcher.search_duckduckgo("iPhone 15", max_results=2))
-        
-        assert len(results) == 2
+    def test_search_duckduckgo_handles_none(self):
+        """The library may return None rather than an empty list."""
+        with patch("reviewers.search.DDGS", self._ddgs_returning(None)):
+            searcher = ReviewSearcher()
+            results = asyncio.run(searcher.search_duckduckgo("iPhone 15"))
 
-    @patch('httpx.AsyncClient')
-    def test_search_duckduckgo_error(self, mock_async_client):
-        """Test DuckDuckGo search with error."""
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(side_effect=Exception("Network error"))
-        mock_async_client.return_value = mock_client
-        
-        searcher = ReviewSearcher()
-        results = asyncio.run(searcher.search_duckduckgo("iPhone 15"))
-        
+        assert results == []
+
+    def test_search_duckduckgo_skips_untitled_rows(self):
+        """Rows without a title are dropped."""
+        factory = self._ddgs_returning([
+            {"title": "Keeper", "body": "b", "href": "https://example.com"},
+            {"title": "", "body": "b", "href": "https://example2.com"},
+        ])
+        with patch("reviewers.search.DDGS", factory):
+            searcher = ReviewSearcher()
+            results = asyncio.run(searcher.search_duckduckgo("iPhone 15"))
+
+        assert [r["title"] for r in results] == ["Keeper"]
+
+    def test_search_duckduckgo_max_results(self):
+        """max_results is handed to the search library."""
+        factory = self._ddgs_returning([
+            {"title": "Review 1", "body": "Snippet 1", "href": "https://example1.com"},
+            {"title": "Review 2", "body": "Snippet 2", "href": "https://example2.com"},
+        ])
+        with patch("reviewers.search.DDGS", factory):
+            searcher = ReviewSearcher()
+            results = asyncio.run(searcher.search_duckduckgo("iPhone 15", max_results=2))
+
+        assert len(results) == 2
+        assert factory.ddgs.text.call_args.kwargs["max_results"] == 2
+
+    def test_search_duckduckgo_error(self):
+        """A library failure is swallowed and yields no results."""
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(side_effect=Exception("Network error"))
+        cm.__exit__ = MagicMock(return_value=False)
+        with patch("reviewers.search.DDGS", MagicMock(return_value=cm)):
+            searcher = ReviewSearcher()
+            results = asyncio.run(searcher.search_duckduckgo("iPhone 15"))
+
         assert results == []
 
     @patch('httpx.AsyncClient')

@@ -114,7 +114,13 @@ class VintedScraper(BaseScraper):
                 None, self._fetch, query, pages
             )
         except Exception as e:
-            self.log_debug(f"[yellow]Vinted fetch error: {e}[/yellow]")
+            # Loud on purpose: a fetch that dies here yields zero listings, which
+            # is indistinguishable from "nothing matched" unless we say so.
+            console.print(f"[red]Vinted fetch failed ({type(e).__name__}): {e}[/red]")
+            logger.error(
+                "Vinted fetch failed",
+                extra={"error": str(e), "error_type": type(e).__name__, "query": query},
+            )
             htmls = []
 
         seen: set[str] = set()

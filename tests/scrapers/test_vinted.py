@@ -3,6 +3,7 @@ Tests for Vinted scraper.
 """
 import pytest
 from unittest.mock import patch
+import httpx
 from models import Listing
 from scrapers.vinted import VintedScraper, _parse_label, _to_float
 
@@ -49,6 +50,28 @@ class TestParsing:
         # with only one price, the total falls back to it
         assert f["price"] == 250.00
         assert f["total_price"] == 250.00
+
+
+class TestHttpStack:
+    """
+    Guards the HTTP stack the scraper needs, without hitting the network.
+
+    The scraper builds its client with http2=True, which needs the optional
+    `h2` package. That arrived transitively once and vanished when the
+    dependency providing it was dropped, breaking every fetch in production
+    while the mocked tests stayed green.
+    """
+
+    def test_http2_client_can_be_constructed(self):
+        with httpx.Client(http2=True) as client:
+            assert client is not None
+
+    def test_scraper_fetch_builds_its_client(self):
+        """Exercise _fetch far enough to construct the real client."""
+        scraper = VintedScraper(debug=False)
+        with patch.object(httpx.Client, "get", side_effect=httpx.ConnectError("offline")):
+            with pytest.raises(httpx.ConnectError):
+                scraper._fetch("anything", 1)
 
 
 class TestVintedScraper:

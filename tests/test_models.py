@@ -71,5 +71,5 @@ class TestListing:
         num_fields = len(fields(Listing))
         # title, price, currency, url, description, platform, images,
         # relevant, relevance_reason, product_model, review_summary,
-        # review_links, score, score_reason, date_posted
-        assert num_fields == 15
+        # review_links, score, score_reason, date_posted, location
+        assert num_fields == 16
